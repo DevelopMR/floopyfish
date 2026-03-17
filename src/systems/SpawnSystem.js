@@ -1,55 +1,98 @@
-import { Coral } from "../entities/Coral.js";
+import { ReefGenerator } from "./ReefGenerator.js";
 
-export class SpawnSystem {
+export class SpawnSystem
+{
 
-  constructor(container) {
+    constructor(container)
+    {
 
-    this.container = container;
-    this.corals = [];
-    this.timer = 0;
+        this.container = container;
 
-  }
+        this.reefGen = new ReefGenerator(777);
 
-  update(delta) {
+        this.segments = [];
 
-    this.timer += delta;
+        this.spawnX = 1280;
 
-    if (this.timer > 150) {
-      this.spawn();
-      this.timer = 0;
+        this.scrollSpeed = 2.5;
+
+        this.spawnSpacing = this.reefGen.segmentWidth;
+
     }
 
-    this.corals = this.corals.filter(c => {
+    update(delta)
+    {
 
-      if (c.sprite.x < -200) {
-        this.container.removeChild(c.sprite);
-        return false;
-      }
+        const dx = this.scrollSpeed * delta;
 
-      return true;
+        for (const seg of this.segments)
+        {
 
-    });
+            seg.x -= dx;
 
-  }
+            seg.topGraphic.x = seg.x;
+            seg.bottomGraphic.x = seg.x;
 
-  spawn() {
+        }
 
-    const gap = 140 + Math.random() * 100;
-    const center = 200 + Math.random() * 300;
+        this.cleanupSegments();
 
-    const topHeight = center - gap / 2;
-    const bottomY = center + gap / 2;
+        this.spawnIfNeeded();
 
-    const top = new Coral(1300, 0, "assets/coral_top.png");
-    top.sprite.height = topHeight;
+    }
 
-    const bottom = new Coral(1300, bottomY, "assets/coral_bottom.png");
+    spawnIfNeeded()
+    {
 
-    this.container.addChild(top.sprite);
-    this.container.addChild(bottom.sprite);
+        if (this.segments.length === 0)
+        {
+            this.spawnSegment(this.spawnX);
+            return;
+        }
 
-    this.corals.push(top, bottom);
+        const last = this.segments[this.segments.length - 1];
 
-  }
+        if (last.x < 1280 - this.spawnSpacing)
+        {
+            this.spawnSegment(last.x + this.spawnSpacing);
+        }
+
+    }
+
+    spawnSegment(x)
+    {
+
+        const seg = this.reefGen.generateSegment(x);
+
+        this.container.addChild(seg.topGraphic);
+        this.container.addChild(seg.bottomGraphic);
+
+        this.segments.push(seg);
+
+    }
+
+    cleanupSegments()
+    {
+
+        const cutoff = -this.spawnSpacing;
+
+        this.segments = this.segments.filter(seg =>
+        {
+
+            if (seg.x < cutoff)
+            {
+
+                this.container.removeChild(seg.topGraphic);
+                this.container.removeChild(seg.bottomGraphic);
+
+                return false;
+
+            }
+
+            return true;
+
+        });
+
+    }
 
 }

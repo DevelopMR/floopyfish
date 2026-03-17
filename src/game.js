@@ -3,6 +3,7 @@ import { Fish } from "./entities/Fish.js";
 import { SpawnSystem } from "./systems/SpawnSystem.js";
 import { CurrentSystem } from "./systems/CurrentSystem.js";
 import { KeyboardController } from "./input/KeyboardController.js";
+import { ReefCollisionSystem } from "./systems/ReefCollisionSystem.js";
 
 export class Game {
 
@@ -19,9 +20,9 @@ export class Game {
     document.body.appendChild(this.app.canvas);
 
     await Assets.load([
-      "./assets/lionfish.png",
-      "./assets/coral_top.png",
-      "./assets/coral_bottom.png"
+      "assets/lionfish75.png",
+      "assets/coral_top.png",
+      "assets/coral_bottom.png"
     ]);
 
     this.world = new Container();
@@ -34,6 +35,7 @@ export class Game {
 
     this.spawnSystem = new SpawnSystem(this.world);
     this.currentSystem = new CurrentSystem();
+    this.collisionSystem = new ReefCollisionSystem(this.spawnSystem);
 
     this.time = 0;
 
@@ -47,7 +49,8 @@ export class Game {
 
   }
 
-  update(delta) {
+  update(delta)
+  {
 
     this.time += delta * 0.01;
 
@@ -61,10 +64,11 @@ export class Game {
 
     this.spawnSystem.update(delta);
 
-    for (const coral of this.spawnSystem.corals) {
-      coral.update(delta);
+    if (this.collisionSystem.checkFishCollision(this.fish))
+    {
+        console.log("fish crashed");
     }
 
   }
+  }
 
-}

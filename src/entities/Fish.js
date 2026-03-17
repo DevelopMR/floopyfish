@@ -4,7 +4,7 @@ export class Fish {
 
   constructor(x, y) {
 
-    this.sprite = new Sprite(Texture.from("assets/lionfish.png"));
+    this.sprite = new Sprite(Texture.from("assets/lionfish75.png"));
 
     this.sprite.anchor.set(0.5);
 
