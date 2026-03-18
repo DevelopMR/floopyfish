@@ -1,4 +1,4 @@
-import { Graphics } from "pixi.js";
+import { Container, Graphics, TilingSprite, Texture } from "pixi.js";
 
 class SeededRandom {
     constructor(seed) {
@@ -82,35 +82,35 @@ export class ReefGenerator {
     }
 
     generateSegment(xPosition) {
-    const gapSize = this.random.range(88, 132);
-    const gapCenter = this.random.range(210, 510);
+      const gapSize = this.random.range(88, 132);
+      const gapCenter = this.random.range(210, 510);
 
-    const topLimit = gapCenter - gapSize * 0.5;
-    const bottomLimit = gapCenter + gapSize * 0.5;
+      const topLimit = gapCenter - gapSize * 0.5;
+      const bottomLimit = gapCenter + gapSize * 0.5;
 
-    const topNodes = this.createBranchField(topLimit, true);
-    const bottomNodes = this.createBranchField(bottomLimit, false);
+      const topNodes = this.createBranchField(topLimit, true);
+      const bottomNodes = this.createBranchField(bottomLimit, false);
 
-    const topProfile = this.sampleSurfaceProfile(topNodes, true, topLimit);
-    const bottomProfile = this.sampleSurfaceProfile(bottomNodes, false, bottomLimit);
+      const topProfile = this.sampleSurfaceProfile(topNodes, true, topLimit);
+      const bottomProfile = this.sampleSurfaceProfile(bottomNodes, false, bottomLimit);
 
-    this.enforceMinimumGap(topProfile, bottomProfile, 130);
+      this.enforceMinimumGap(topProfile, bottomProfile, 130);
 
-    const topGraphic = this.buildCoralContainer(topProfile, true, topLimit);
-    const bottomGraphic = this.buildCoralContainer(bottomProfile, false, bottomLimit);
+      const topGraphic = this.buildCoralContainer(topProfile, true, topLimit);
+      const bottomGraphic = this.buildCoralContainer(bottomProfile, false, bottomLimit);
 
-    topGraphic.x = xPosition;
-    bottomGraphic.x = xPosition;
+      topGraphic.x = xPosition;
+      bottomGraphic.x = xPosition;
 
-    return {
-        x: xPosition,
-        width: this.segmentWidth,
-        topGraphic,
-        bottomGraphic,
-        topProfile,
-        bottomProfile,
-    };
-}
+      return {
+          x: xPosition,
+          width: this.segmentWidth,
+          topGraphic,
+          bottomGraphic,
+          topProfile,
+          bottomProfile,
+      };
+    }
 
     createBranchField(limit, isTop) {
       const nodes = [];
@@ -191,6 +191,30 @@ export class ReefGenerator {
       return nodes;
     }
 
+    buildSilhouettePath(profile, isTop) {
+      const path = [];
+
+      if (isTop) {
+          path.push(0, 0);
+
+          for (const p of profile) {
+              path.push(p.x, p.y);
+          }
+
+          path.push(this.coralBodyWidth, 0);
+      } else {
+          path.push(0, this.maxHeight);
+
+          for (const p of profile) {
+              path.push(p.x, p.y);
+          }
+
+          path.push(this.coralBodyWidth, this.maxHeight);
+      }
+
+      return path;
+    }
+
     sampleSurfaceProfile(nodes, isTop, limit) {
       const points = [];
 
@@ -223,8 +247,8 @@ export class ReefGenerator {
       }
 
       const smoothed = this.smoothProfile(points, isTop, limit);
+      this.roundProfileCaps(smoothed, isTop, limit);
       this.applyRightEdgeTaper(smoothed, isTop, limit);
-
       return smoothed;
     }
 
@@ -293,34 +317,54 @@ export class ReefGenerator {
     }
 
     buildCoralContainer(profile, isTop, limit) {
-      const coral = new Graphics();
+      const container = new Container();
 
-      const fillPath = [];
-
-      if (isTop) {
-          fillPath.push(0, 0);
-          for (const p of profile) {
-              fillPath.push(p.x, p.y);
-          }
-          fillPath.push(this.coralBodyWidth, 0);
-      } else {
-          fillPath.push(0, this.maxHeight);
-          for (const p of profile) {
-              fillPath.push(p.x, p.y);
-          }
-          fillPath.push(this.coralBodyWidth, this.maxHeight);
-      }
+      const path = this.buildSilhouettePath(profile, isTop);
 
       const fillColor = isTop
           ? this.randomColor(this.topColorMin, this.topColorMax)
           : this.randomColor(this.bottomColorMin, this.bottomColorMax);
 
-      coral.poly(fillPath).fill(fillColor);
+      // Base fill
+      const base = new Graphics();
+      base.poly(path).fill(fillColor);
 
-      this.drawBranchDecorations(coral, profile, isTop, limit);
-      this.drawEdgeHighlights(coral, profile, isTop);
+      // Mask shape for texture
+      const maskShape = new Graphics();
+      maskShape.poly(path).fill(0xffffff);
 
-      return coral;
+      // Textured material layer
+      const texture = Texture.from("assets/coral_texture2.png");
+      const textured = new TilingSprite({
+          texture,
+          width: this.coralBodyWidth,
+          height: this.maxHeight,
+      });
+
+      textured.tileScale.set(0.75, 0.75);
+      textured.tilePosition.set(
+          this.random.range(0, 256),
+          this.random.range(0, 256)
+      );
+
+      // Slight tint split between top and bottom
+      textured.tint = isTop ? 0xfff2f0 : 0xf6ecff;
+      textured.alpha = 0.72;
+      textured.blendMode = "multiply";
+
+      textured.mask = maskShape;
+
+      const deco = new Graphics();
+      this.drawBranchDecorations(deco, profile, isTop, limit);
+      this.drawEdgeHighlights(deco, profile, isTop);
+      this.drawEdgeLightBand(deco, profile, isTop, limit);
+
+      container.addChild(base);
+      container.addChild(textured);
+      container.addChild(deco);
+      container.addChild(maskShape);
+
+      return container;
     }
 
     drawBranchDecorations(graphics, profile, isTop, limit) {
@@ -341,6 +385,10 @@ export class ReefGenerator {
           // Avoid drawing inside the taper seam
           if (base.x > this.coralBodyWidth - this.taperWidth - 8) {
               continue;
+          }
+
+          if (!this.isGentleSurface(profile, index, 10)) {
+            continue;
           }
 
           const dir = isTop ? 1 : -1;
@@ -400,6 +448,79 @@ export class ReefGenerator {
               graphics.circle(nubTipX, nubTipY, nubWidth * 0.45).fill(color);
           }
       }
+    }
+
+    isGentleSurface(profile, index, maxDelta = 10) {
+      const prev = profile[Math.max(0, index - 1)];
+      const next = profile[Math.min(profile.length - 1, index + 1)];
+
+      return Math.abs(next.y - prev.y) <= maxDelta;
+    }
+
+    roundProfileCaps(profile, isTop, limit) {
+      for (let i = 2; i < profile.length - 2; i++) {
+          const y0 = profile[i - 2].y;
+          const y1 = profile[i - 1].y;
+          const y2 = profile[i].y;
+          const y3 = profile[i + 1].y;
+          const y4 = profile[i + 2].y;
+
+          // Detect narrow local extremum
+          const localAverage = (y0 + y1 + y3 + y4) / 4;
+          const delta = y2 - localAverage;
+
+          if (Math.abs(delta) > 10) {
+              let rounded = localAverage + delta * 0.45;
+
+              if (isTop) {
+                  rounded = this.clamp(rounded, 0, limit);
+              } else {
+                  rounded = this.clamp(rounded, limit, this.maxHeight);
+              }
+
+              profile[i].y = Math.round(rounded);
+          }
+      }
+    }
+
+    drawEdgeLightBand(graphics, profile, isTop, limit) {
+        const color = isTop ? 0xfff1ea : 0xf4e8ff;
+
+        for (let i = 1; i < profile.length - 1; i++) {
+            const p0 = profile[i - 1];
+            const p1 = profile[i];
+            const p2 = profile[i + 1];
+
+            const dy = p2.y - p0.y;
+
+            // Skip steep slopes so the light looks cleaner
+            if (Math.abs(dy) > 12) {
+                continue;
+            }
+
+            const dir = isTop ? 1 : -1;
+
+            const outerY = p1.y;
+            const innerY = this.clampDirectedY(
+                p1.y + dir * this.random.range(5, 9),
+                isTop,
+                limit
+            );
+
+            const halfWidth = this.random.range(3, 6);
+
+            const path = [
+                p1.x - halfWidth, outerY,
+                p1.x - halfWidth * 0.7, innerY,
+                p1.x + halfWidth * 0.7, innerY,
+                p1.x + halfWidth, outerY
+            ];
+
+            graphics.poly(path).fill({
+                color,
+                alpha: 0.22,
+            });
+        }
     }
 
     drawEdgeHighlights(graphics, profile, isTop) {
