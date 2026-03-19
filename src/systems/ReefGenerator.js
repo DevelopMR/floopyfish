@@ -151,10 +151,26 @@ export class ReefGenerator {
                 topA.x, centerYA + bandHalfHeight,
             ];
 
-            glow.poly(bandPath).fill({
-                color: this.pressureGlowColor,
-                alpha,
-            });
+            /*             glow.poly(bandPath).fill({
+                            color: this.pressureGlowColor,
+                            alpha,
+                        }); */
+
+            /* this.drawFadedPressureBand(
+                glow,
+                topA.x, centerYA,
+                topB.x, centerYB,
+                bandHalfHeight,
+                alpha
+            ); */
+
+            this.drawHorizontalFadedPressureBand(
+                glow,
+                topA.x, centerYA,
+                topB.x, centerYB,
+                bandHalfHeight,
+                alpha
+            );
 
             streaks.moveTo(topA.x, centerYA);
             streaks.lineTo(topB.x, centerYB);
@@ -188,11 +204,88 @@ export class ReefGenerator {
 
         container.pressureGlow = glow;
         container.pressureStreaks = streaks;
-        container.baseAlpha = 1;
         container.phase = this.random.range(0, Math.PI * 2);
-        container.tightnessBias = this.random.range(0.9, 1.15);
 
         return container;
+    }
+
+    drawHorizontalFadedPressureBand(graphics, x0, y0, x1, y1, bandHalfHeight, baseAlpha) {
+        const steps = 10;
+        const layers = [
+            { scale: 1.00, alpha: 0.16 },
+            { scale: 0.72, alpha: 0.24 },
+            { scale: 0.46, alpha: 0.34 },
+            { scale: 0.24, alpha: 0.44 },
+        ];
+
+        for (let i = 0; i < steps; i++) {
+            const t0 = i / steps;
+            const t1 = (i + 1) / steps;
+
+            const xa0 = this.lerp(x0, x1, t0);
+            const xa1 = this.lerp(x0, x1, t1);
+
+            const ya0 = this.lerp(y0, y1, t0);
+            const ya1 = this.lerp(y0, y1, t1);
+
+            const midT = (t0 + t1) * 0.5;
+
+            let horizontalFade;
+            if (midT < 0.5) {
+                const rise = midT / 0.5;
+                horizontalFade = rise * rise * (3 - 2 * rise);
+            } else {
+                const fall = (1 - midT) / 0.5;
+                horizontalFade = fall * fall * (3 - 2 * fall);
+            }
+
+            for (const layer of layers) {
+                const h = bandHalfHeight * layer.scale;
+                const alpha = baseAlpha * horizontalFade * layer.alpha;
+
+                if (alpha <= 0.001) {
+                    continue;
+                }
+
+                const path = [
+                    xa0, ya0 - h,
+                    xa1, ya1 - h,
+                    xa1, ya1 + h,
+                    xa0, ya0 + h,
+                ];
+
+                graphics.poly(path).fill({
+                    color: this.pressureGlowColor,
+                    alpha,
+                });
+            }
+        }
+    }
+
+
+    drawFadedPressureBand(graphics, x0, y0, x1, y1, bandHalfHeight, baseAlpha) {
+        const layers = [
+            { scale: 1.00, alpha: 0.18 },
+            { scale: 0.72, alpha: 0.26 },
+            { scale: 0.46, alpha: 0.34 },
+            { scale: 0.24, alpha: 0.42 },
+        ];
+
+        for (const layer of layers) {
+            const h = bandHalfHeight * layer.scale;
+
+            const path = [
+                x0, y0 - h,
+                x1, y1 - h,
+                x1, y1 + h,
+                x0, y0 + h,
+            ];
+
+            graphics.poly(path).fill({
+                color: this.pressureGlowColor,
+                alpha: baseAlpha * layer.alpha,
+            });
+        }
     }
 
 

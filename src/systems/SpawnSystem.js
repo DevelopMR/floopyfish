@@ -32,6 +32,7 @@ export class SpawnSystem {
         }
 
         this.cleanupSegments();
+
         this.spawnIfNeeded();
     }
 
@@ -43,17 +44,29 @@ export class SpawnSystem {
         }
 
         const phase = this.pressureTime + (pressure.phase ?? 0);
-        const pulse = 0.84 + Math.sin(phase * 1.7) * 0.36;
-        const shimmer = 0.92 + Math.sin(phase * 1.25 + 1.4) * 0.08;
+        const pulse = 0.84 + Math.sin(phase * 1.7) * 0.16;
+        const shimmer = 0.96 + Math.sin(phase * 2.9 + 1.4) * 0.04;
 
         pressure.alpha = pulse;
-        pressure.scale.y = shimmer;
+        /*         pressure.scale.y = shimmer;
+        
+                // subtle vertical breathing
+                pressure.y = Math.sin(phase * 1.15) * 1.4; */
 
-        // very slight vertical breathing
-        pressure.y = Math.sin(phase * 1.15) * 2.5;
 
-        // optional streak drift feel
+        pressure.scale.y = 0.985 + Math.sin(phase * 2.9 + 1.4) * 0.02;
+        pressure.y = Math.sin(phase * 1.15) * 0.8;
+
+        // leftward flow drift
+        pressure.flowOffset ??= 0;
+        pressure.flowOffset -= delta * 0.9;
+
+        if (pressure.flowOffset < -18) {
+            pressure.flowOffset += 18;
+        }
+
         if (pressure.pressureStreaks) {
+            pressure.pressureStreaks.x = pressure.flowOffset;
             pressure.pressureStreaks.alpha = 0.82 + Math.sin(phase * 2.4) * 0.18;
         }
 
@@ -73,6 +86,7 @@ export class SpawnSystem {
         if (last.x < 1280 - this.spawnSpacing) {
             this.spawnSegment(last.x + this.spawnSpacing);
         }
+
     }
 
     spawnSegment(x) {
@@ -99,5 +113,7 @@ export class SpawnSystem {
 
             return true;
         });
+
     }
+
 }
