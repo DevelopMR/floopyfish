@@ -2,12 +2,12 @@ import { Container, Graphics, TilingSprite, Texture } from "pixi.js";
 
 class SeededRandom {
     constructor(seed) {
-        this.seed = seed >>> 0; 
+        this.seed = seed >>> 0;
     }
 
     next() {
         let t = (this.seed += 0x6D2B79F5);
-        t = Math.imul(t ^ (t >>> 15), t | 1); 
+        t = Math.imul(t ^ (t >>> 15), t | 1);
         t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
         return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
     }
@@ -56,225 +56,224 @@ export class ReefGenerator {
         this.taperWidth = 48;
         this.taperStrength = .8;
 
-        
+
     }
 
     enforceMinimumGap(topProfile, bottomProfile, minGap) {
 
-      for (let i = 0; i < topProfile.length; i++) {
+        for (let i = 0; i < topProfile.length; i++) {
 
-          const topY = topProfile[i].y;
-          const bottomY = bottomProfile[i].y;
+            const topY = topProfile[i].y;
+            const bottomY = bottomProfile[i].y;
 
-          const currentGap = bottomY - topY;
+            const currentGap = bottomY - topY;
 
-          if (currentGap < minGap) {
+            if (currentGap < minGap) {
 
-              const correction = (minGap - currentGap) * 0.5;
+                const correction = (minGap - currentGap) * 0.5;
 
-              topProfile[i].y -= correction;
-              bottomProfile[i].y += correction;
+                topProfile[i].y -= correction;
+                bottomProfile[i].y += correction;
 
-          }
+            }
 
-      }
+        }
 
     }
 
     generateSegment(xPosition) {
-      const gapSize = this.random.range(88, 132);
-      const gapCenter = this.random.range(210, 510);
+        const gapSize = this.random.range(120, 200); // expand gap size range to reduce instances of very tight gaps that are hard to navigate
+        const gapCenter = this.random.range(175, 650);
+        const topLimit = gapCenter - gapSize * 0.5;
+        const bottomLimit = gapCenter + gapSize * 0.5;
 
-      const topLimit = gapCenter - gapSize * 0.5;
-      const bottomLimit = gapCenter + gapSize * 0.5;
+        const topNodes = this.createBranchField(topLimit, true);
+        const bottomNodes = this.createBranchField(bottomLimit, false);
 
-      const topNodes = this.createBranchField(topLimit, true);
-      const bottomNodes = this.createBranchField(bottomLimit, false);
+        const topProfile = this.sampleSurfaceProfile(topNodes, true, topLimit);
+        const bottomProfile = this.sampleSurfaceProfile(bottomNodes, false, bottomLimit);
 
-      const topProfile = this.sampleSurfaceProfile(topNodes, true, topLimit);
-      const bottomProfile = this.sampleSurfaceProfile(bottomNodes, false, bottomLimit);
+        this.enforceMinimumGap(topProfile, bottomProfile, 130);
 
-      this.enforceMinimumGap(topProfile, bottomProfile, 130);
+        const topGraphic = this.buildCoralContainer(topProfile, true, topLimit);
+        const bottomGraphic = this.buildCoralContainer(bottomProfile, false, bottomLimit);
 
-      const topGraphic = this.buildCoralContainer(topProfile, true, topLimit);
-      const bottomGraphic = this.buildCoralContainer(bottomProfile, false, bottomLimit);
+        topGraphic.x = xPosition;
+        bottomGraphic.x = xPosition;
 
-      topGraphic.x = xPosition;
-      bottomGraphic.x = xPosition;
-
-      return {
-          x: xPosition,
-          width: this.segmentWidth,
-          topGraphic,
-          bottomGraphic,
-          topProfile,
-          bottomProfile,
-      };
+        return {
+            x: xPosition,
+            width: this.segmentWidth,
+            topGraphic,
+            bottomGraphic,
+            topProfile,
+            bottomProfile,
+        };
     }
 
     createBranchField(limit, isTop) {
-      const nodes = [];
+        const nodes = [];
 
-      const growthSign = isTop ? 1 : -1;
-      const anchorY = isTop ? 0 : this.maxHeight;
+        const growthSign = isTop ? 1 : -1;
+        const anchorY = isTop ? 0 : this.maxHeight;
 
-      const availableDepth = isTop
-          ? Math.max(36, limit - 16)
-          : Math.max(36, this.maxHeight - limit - 16);
+        const availableDepth = isTop
+            ? Math.max(36, limit - 16)
+            : Math.max(36, this.maxHeight - limit - 16);
 
-      const trunkCount = this.metaballCount;
-      const rootCount = this.random.int(2, 3);
+        const trunkCount = this.metaballCount;
+        const rootCount = this.random.int(2, 3);
 
-      for (let rootIndex = 0; rootIndex < rootCount; rootIndex++) {
-          let x = this.random.range(28, this.coralBodyWidth - 28);
-          let y = anchorY;
+        for (let rootIndex = 0; rootIndex < rootCount; rootIndex++) {
+            let x = this.random.range(28, this.coralBodyWidth - 28);
+            let y = anchorY;
 
-          for (let i = 0; i < trunkCount; i++) {
-              const t = trunkCount === 1 ? 1 : i / (trunkCount - 1);
+            for (let i = 0; i < trunkCount; i++) {
+                const t = trunkCount === 1 ? 1 : i / (trunkCount - 1);
 
-              const stepDepth = availableDepth * this.random.range(0.16, 0.28);
-              const stepLateral = this.random.range(-14, 14);
+                const stepDepth = availableDepth * this.random.range(0.16, 0.28);
+                const stepLateral = this.random.range(-14, 14);
 
-              x = this.clamp(x + stepLateral, 14, this.coralBodyWidth - 14);
-              y = this.clampDirectedY(y + stepDepth * growthSign, isTop, limit);
+                x = this.clamp(x + stepLateral, 14, this.coralBodyWidth - 14);
+                y = this.clampDirectedY(y + stepDepth * growthSign, isTop, limit);
 
-              const radius = this.lerp(26, 12, t) * this.random.range(0.95, 1.12);
+                const radius = this.lerp(26, 12, t) * this.random.range(0.95, 1.12);
 
-              nodes.push({ x, y, r: radius });
+                nodes.push({ x, y, r: radius });
 
-              const branchCount = this.random.int(1, 3);
+                const branchCount = this.random.int(1, 3);
 
-              for (let b = 0; b < branchCount; b++) {
-                  const branchSide = this.random.sign();
-                  const branchReach = this.random.range(16, 46) * branchSide;
-                  const branchDepth = this.random.range(10, 30) * growthSign;
+                for (let b = 0; b < branchCount; b++) {
+                    const branchSide = this.random.sign();
+                    const branchReach = this.random.range(16, 46) * branchSide;
+                    const branchDepth = this.random.range(10, 30) * growthSign;
 
-                  const bx = this.clamp(x + branchReach, 10, this.coralBodyWidth - 10);
-                  const by = this.clampDirectedY(y + branchDepth, isTop, limit);
-                  const br = radius * this.random.range(0.42, 0.7);
+                    const bx = this.clamp(x + branchReach, 10, this.coralBodyWidth - 10);
+                    const by = this.clampDirectedY(y + branchDepth, isTop, limit);
+                    const br = radius * this.random.range(0.42, 0.7);
 
-                  nodes.push({ x: bx, y: by, r: br });
+                    nodes.push({ x: bx, y: by, r: br });
 
-                  if (this.random.chance(0.45)) {
-                      const tx = this.clamp(
-                          bx + this.random.range(-16, 16),
-                          8,
-                          this.coralBodyWidth - 8
-                      );
-                      const ty = this.clampDirectedY(
-                          by + this.random.range(8, 22) * growthSign,
-                          isTop,
-                          limit
-                      );
+                    if (this.random.chance(0.45)) {
+                        const tx = this.clamp(
+                            bx + this.random.range(-16, 16),
+                            8,
+                            this.coralBodyWidth - 8
+                        );
+                        const ty = this.clampDirectedY(
+                            by + this.random.range(8, 22) * growthSign,
+                            isTop,
+                            limit
+                        );
 
-                      nodes.push({
-                          x: tx,
-                          y: ty,
-                          r: br * this.random.range(0.45, 0.7),
-                      });
-                  }
-              }
-          }
-      }
+                        nodes.push({
+                            x: tx,
+                            y: ty,
+                            r: br * this.random.range(0.45, 0.7),
+                        });
+                    }
+                }
+            }
+        }
 
-      const baseCount = this.random.int(2, 4);
-      for (let i = 0; i < baseCount; i++) {
-          nodes.push({
-              x: this.random.range(0, this.coralBodyWidth),
-              y: isTop
-                  ? this.random.range(0, Math.min(limit * 0.12, 26))
-                  : this.random.range(Math.max(limit, this.maxHeight - 26), this.maxHeight),
-              r: this.random.range(18, 32),
-          });
-      }
+        const baseCount = this.random.int(2, 4);
+        for (let i = 0; i < baseCount; i++) {
+            nodes.push({
+                x: this.random.range(0, this.coralBodyWidth),
+                y: isTop
+                    ? this.random.range(0, Math.min(limit * 0.12, 26))
+                    : this.random.range(Math.max(limit, this.maxHeight - 26), this.maxHeight),
+                r: this.random.range(18, 32),
+            });
+        }
 
-      return nodes;
+        return nodes;
     }
 
     buildSilhouettePath(profile, isTop) {
-      const path = [];
+        const path = [];
 
-      if (isTop) {
-          path.push(0, 0);
+        if (isTop) {
+            path.push(0, 0);
 
-          for (const p of profile) {
-              path.push(p.x, p.y);
-          }
+            for (const p of profile) {
+                path.push(p.x, p.y);
+            }
 
-          path.push(this.coralBodyWidth, 0);
-      } else {
-          path.push(0, this.maxHeight);
+            path.push(this.coralBodyWidth, 0);
+        } else {
+            path.push(0, this.maxHeight);
 
-          for (const p of profile) {
-              path.push(p.x, p.y);
-          }
+            for (const p of profile) {
+                path.push(p.x, p.y);
+            }
 
-          path.push(this.coralBodyWidth, this.maxHeight);
-      }
+            path.push(this.coralBodyWidth, this.maxHeight);
+        }
 
-      return path;
+        return path;
     }
 
     sampleSurfaceProfile(nodes, isTop, limit) {
-      const points = [];
+        const points = [];
 
-      for (let x = 0; x <= this.coralBodyWidth; x += this.sampleStep) {
-          let surfaceY = isTop ? 0 : this.maxHeight;
+        for (let x = 0; x <= this.coralBodyWidth; x += this.sampleStep) {
+            let surfaceY = isTop ? 0 : this.maxHeight;
 
-          if (isTop) {
-              for (let y = Math.floor(limit); y >= 0; y -= this.sampleStep) {
-                  if (this.fieldValue(x, y, nodes) >= this.fieldThreshold) {
-                      surfaceY = y;
-                      break;
-                  }
-              }
+            if (isTop) {
+                for (let y = Math.floor(limit); y >= 0; y -= this.sampleStep) {
+                    if (this.fieldValue(x, y, nodes) >= this.fieldThreshold) {
+                        surfaceY = y;
+                        break;
+                    }
+                }
 
-              surfaceY += this.random.range(-2, 2);
-              surfaceY = this.clamp(surfaceY, 0, limit);
-          } else {
-              for (let y = Math.ceil(limit); y <= this.maxHeight; y += this.sampleStep) {
-                  if (this.fieldValue(x, y, nodes) >= this.fieldThreshold) {
-                      surfaceY = y;
-                      break;
-                  }
-              }
+                surfaceY += this.random.range(-2, 2);
+                surfaceY = this.clamp(surfaceY, 0, limit);
+            } else {
+                for (let y = Math.ceil(limit); y <= this.maxHeight; y += this.sampleStep) {
+                    if (this.fieldValue(x, y, nodes) >= this.fieldThreshold) {
+                        surfaceY = y;
+                        break;
+                    }
+                }
 
-              surfaceY += this.random.range(-2, 2);
-              surfaceY = this.clamp(surfaceY, limit, this.maxHeight);
-          }
+                surfaceY += this.random.range(-2, 2);
+                surfaceY = this.clamp(surfaceY, limit, this.maxHeight);
+            }
 
-          points.push({ x, y: surfaceY });
-      }
+            points.push({ x, y: surfaceY });
+        }
 
-      const smoothed = this.smoothProfile(points, isTop, limit);
-      this.roundProfileCaps(smoothed, isTop, limit);
-      this.applyRightEdgeTaper(smoothed, isTop, limit);
-      return smoothed;
+        const smoothed = this.smoothProfile(points, isTop, limit);
+        this.roundProfileCaps(smoothed, isTop, limit);
+        this.applyRightEdgeTaper(smoothed, isTop, limit);
+        return smoothed;
     }
 
     applyRightEdgeTaper(profile, isTop, limit) {
-    const taperStartX = this.coralBodyWidth - this.taperWidth;
-    const anchorY = isTop ? 0 : this.maxHeight;
+        const taperStartX = this.coralBodyWidth - this.taperWidth;
+        const anchorY = isTop ? 0 : this.maxHeight;
 
-    for (let i = 0; i < profile.length; i++) {
-        const p = profile[i];
+        for (let i = 0; i < profile.length; i++) {
+            const p = profile[i];
 
-        if (p.x < taperStartX) {
-            continue;
-        }
+            if (p.x < taperStartX) {
+                continue;
+            }
 
-        const t = (p.x - taperStartX) / Math.max(1, this.taperWidth);
-        const eased = t * t * (3 - 2 * t);
+            const t = (p.x - taperStartX) / Math.max(1, this.taperWidth);
+            const eased = t * t * (3 - 2 * t);
 
-        if (isTop) {
-            p.y = Math.round(this.lerp(p.y, anchorY, eased * this.taperStrength));
-            p.y = this.clamp(p.y, 0, limit);
-        } else {
-            p.y = Math.round(this.lerp(p.y, anchorY, eased * this.taperStrength));
-            p.y = this.clamp(p.y, limit, this.maxHeight);
+            if (isTop) {
+                p.y = Math.round(this.lerp(p.y, anchorY, eased * this.taperStrength));
+                p.y = this.clamp(p.y, 0, limit);
+            } else {
+                p.y = Math.round(this.lerp(p.y, anchorY, eased * this.taperStrength));
+                p.y = this.clamp(p.y, limit, this.maxHeight);
+            }
         }
     }
-}
 
     fieldValue(x, y, nodes) {
         let sum = 0;
@@ -317,170 +316,170 @@ export class ReefGenerator {
     }
 
     buildCoralContainer(profile, isTop, limit) {
-      const container = new Container();
+        const container = new Container();
 
-      const path = this.buildSilhouettePath(profile, isTop);
+        const path = this.buildSilhouettePath(profile, isTop);
 
-      const fillColor = isTop
-          ? this.randomColor(this.topColorMin, this.topColorMax)
-          : this.randomColor(this.bottomColorMin, this.bottomColorMax);
+        const fillColor = isTop
+            ? this.randomColor(this.topColorMin, this.topColorMax)
+            : this.randomColor(this.bottomColorMin, this.bottomColorMax);
 
-      // Base fill
-      const base = new Graphics();
-      base.poly(path).fill(fillColor);
+        // Base fill
+        const base = new Graphics();
+        base.poly(path).fill(fillColor);
 
-      // Mask shape for texture
-      const maskShape = new Graphics();
-      maskShape.poly(path).fill(0xffffff);
+        // Mask shape for texture
+        const maskShape = new Graphics();
+        maskShape.poly(path).fill(0xffffff);
 
-      // Textured material layer
-      const texture = Texture.from("assets/coral_texture2.png");
-      const textured = new TilingSprite({
-          texture,
-          width: this.coralBodyWidth,
-          height: this.maxHeight,
-      });
+        // Textured material layer
+        const texture = Texture.from("assets/coral_texture2.png");
+        const textured = new TilingSprite({
+            texture,
+            width: this.coralBodyWidth,
+            height: this.maxHeight,
+        });
 
-      textured.tileScale.set(0.75, 0.75);
-      textured.tilePosition.set(
-          this.random.range(0, 256),
-          this.random.range(0, 256)
-      );
+        textured.tileScale.set(0.75, 0.75);
+        textured.tilePosition.set(
+            this.random.range(0, 256),
+            this.random.range(0, 256)
+        );
 
-      // Slight tint split between top and bottom
-      textured.tint = isTop ? 0xfff2f0 : 0xf6ecff;
-      textured.alpha = 0.72;
-      textured.blendMode = "multiply";
+        // Slight tint split between top and bottom
+        textured.tint = isTop ? 0xfff2f0 : 0xf6ecff;
+        textured.alpha = 0.72;
+        textured.blendMode = "multiply";
 
-      textured.mask = maskShape;
+        textured.mask = maskShape;
 
-      const deco = new Graphics();
-      this.drawBranchDecorations(deco, profile, isTop, limit);
-      this.drawEdgeHighlights(deco, profile, isTop);
-      this.drawEdgeLightBand(deco, profile, isTop, limit);
+        const deco = new Graphics();
+        this.drawBranchDecorations(deco, profile, isTop, limit);
+        this.drawEdgeHighlights(deco, profile, isTop);
+        this.drawEdgeLightBand(deco, profile, isTop, limit);
 
-      container.addChild(base);
-      container.addChild(textured);
-      container.addChild(deco);
-      container.addChild(maskShape);
+        container.addChild(base);
+        container.addChild(textured);
+        container.addChild(deco);
+        container.addChild(maskShape);
 
-      return container;
+        return container;
     }
 
     drawBranchDecorations(graphics, profile, isTop, limit) {
-      const decorCount = this.random.int(4, 7); //const decorCount = this.random.int(5, 9);
-      const used = new Set();
+        const decorCount = this.random.int(4, 7); //const decorCount = this.random.int(5, 9);
+        const used = new Set();
 
-      for (let i = 0; i < decorCount; i++) {
-          const maxIndex = Math.max(4, profile.length - 6);
-          let index = this.random.int(4, maxIndex);
+        for (let i = 0; i < decorCount; i++) {
+            const maxIndex = Math.max(4, profile.length - 6);
+            let index = this.random.int(4, maxIndex);
 
-          if (used.has(index)) {
-              continue;
-          }
-          used.add(index);
+            if (used.has(index)) {
+                continue;
+            }
+            used.add(index);
 
-          const base = profile[index];
+            const base = profile[index];
 
-          // Avoid drawing inside the taper seam
-          if (base.x > this.coralBodyWidth - this.taperWidth - 8) {
-              continue;
-          }
+            // Avoid drawing inside the taper seam
+            if (base.x > this.coralBodyWidth - this.taperWidth - 8) {
+                continue;
+            }
 
-          if (!this.isGentleSurface(profile, index, 10)) {
-            continue;
-          }
+            if (!this.isGentleSurface(profile, index, 10)) {
+                continue;
+            }
 
-          const dir = isTop ? 1 : -1;
+            const dir = isTop ? 1 : -1;
 
-          const length = this.random.range(14, 26); //const length = this.random.range(12, 24);
-          const halfWidth = this.random.range(4, 7); //const halfWidth = this.random.range(3, 6);
-          const bend = this.random.range(-3, 3);
+            const length = this.random.range(14, 26); //const length = this.random.range(12, 24);
+            const halfWidth = this.random.range(4, 7); //const halfWidth = this.random.range(3, 6);
+            const bend = this.random.range(-3, 3);
 
-          const midY = this.clampDirectedY(base.y + length * 0.55 * dir, isTop, limit);
-          const tipY = this.clampDirectedY(base.y + length * dir, isTop, limit);
+            const midY = this.clampDirectedY(base.y + length * 0.55 * dir, isTop, limit);
+            const tipY = this.clampDirectedY(base.y + length * dir, isTop, limit);
 
-          const midX = base.x + bend * 0.5;
-          const tipX = base.x + bend;
+            const midX = base.x + bend * 0.5;
+            const tipX = base.x + bend;
 
-          const color = isTop
-              ? this.randomColor(0xefbdb5, 0xf8d8cc)
-              : this.randomColor(0xe6c8f4, 0xf3dcff);
+            const color = isTop
+                ? this.randomColor(0xefbdb5, 0xf8d8cc)
+                : this.randomColor(0xe6c8f4, 0xf3dcff);
 
-          // Rounded stalk body
-          const bodyPath = [
-              base.x - halfWidth, base.y,
-              midX - halfWidth * 0.9, midY,
-              tipX - halfWidth * 0.45, tipY,
-              tipX + halfWidth * 0.45, tipY,
-              midX + halfWidth * 0.9, midY,
-              base.x + halfWidth, base.y
-          ];
+            // Rounded stalk body
+            const bodyPath = [
+                base.x - halfWidth, base.y,
+                midX - halfWidth * 0.9, midY,
+                tipX - halfWidth * 0.45, tipY,
+                tipX + halfWidth * 0.45, tipY,
+                midX + halfWidth * 0.9, midY,
+                base.x + halfWidth, base.y
+            ];
 
-          graphics.poly(bodyPath).fill(color);
+            graphics.poly(bodyPath).fill(color);
 
-          // Rounded cap
-          graphics.circle(tipX, tipY, halfWidth * 0.7).fill(color);
+            // Rounded cap
+            graphics.circle(tipX, tipY, halfWidth * 0.7).fill(color);
 
-          // Optional side nub for more coral-like growth
-          if (this.random.chance(0.28)) {
-              const side = this.random.sign();
-              const nubBaseX = base.x + side * this.random.range(1, 4);
-              const nubBaseY = this.clampDirectedY(base.y + length * 0.45 * dir, isTop, limit);
+            // Optional side nub for more coral-like growth
+            if (this.random.chance(0.28)) {
+                const side = this.random.sign();
+                const nubBaseX = base.x + side * this.random.range(1, 4);
+                const nubBaseY = this.clampDirectedY(base.y + length * 0.45 * dir, isTop, limit);
 
-              const nubTipX = nubBaseX + side * this.random.range(4, 8);
-              const nubTipY = this.clampDirectedY(
-                  nubBaseY + length * this.random.range(0.18, 0.32) * dir,
-                  isTop,
-                  limit
-              );
+                const nubTipX = nubBaseX + side * this.random.range(4, 8);
+                const nubTipY = this.clampDirectedY(
+                    nubBaseY + length * this.random.range(0.18, 0.32) * dir,
+                    isTop,
+                    limit
+                );
 
-              const nubWidth = halfWidth * 0.55;
+                const nubWidth = halfWidth * 0.55;
 
-              const nubPath = [
-                  nubBaseX - nubWidth * 0.6, nubBaseY,
-                  nubTipX - nubWidth * 0.35, nubTipY,
-                  nubTipX + nubWidth * 0.35, nubTipY,
-                  nubBaseX + nubWidth * 0.6, nubBaseY
-              ];
+                const nubPath = [
+                    nubBaseX - nubWidth * 0.6, nubBaseY,
+                    nubTipX - nubWidth * 0.35, nubTipY,
+                    nubTipX + nubWidth * 0.35, nubTipY,
+                    nubBaseX + nubWidth * 0.6, nubBaseY
+                ];
 
-              graphics.poly(nubPath).fill(color);
-              graphics.circle(nubTipX, nubTipY, nubWidth * 0.45).fill(color);
-          }
-      }
+                graphics.poly(nubPath).fill(color);
+                graphics.circle(nubTipX, nubTipY, nubWidth * 0.45).fill(color);
+            }
+        }
     }
 
     isGentleSurface(profile, index, maxDelta = 10) {
-      const prev = profile[Math.max(0, index - 1)];
-      const next = profile[Math.min(profile.length - 1, index + 1)];
+        const prev = profile[Math.max(0, index - 1)];
+        const next = profile[Math.min(profile.length - 1, index + 1)];
 
-      return Math.abs(next.y - prev.y) <= maxDelta;
+        return Math.abs(next.y - prev.y) <= maxDelta;
     }
 
     roundProfileCaps(profile, isTop, limit) {
-      for (let i = 2; i < profile.length - 2; i++) {
-          const y0 = profile[i - 2].y;
-          const y1 = profile[i - 1].y;
-          const y2 = profile[i].y;
-          const y3 = profile[i + 1].y;
-          const y4 = profile[i + 2].y;
+        for (let i = 2; i < profile.length - 2; i++) {
+            const y0 = profile[i - 2].y;
+            const y1 = profile[i - 1].y;
+            const y2 = profile[i].y;
+            const y3 = profile[i + 1].y;
+            const y4 = profile[i + 2].y;
 
-          // Detect narrow local extremum
-          const localAverage = (y0 + y1 + y3 + y4) / 4;
-          const delta = y2 - localAverage;
+            // Detect narrow local extremum
+            const localAverage = (y0 + y1 + y3 + y4) / 4;
+            const delta = y2 - localAverage;
 
-          if (Math.abs(delta) > 10) {
-              let rounded = localAverage + delta * 0.45;
+            if (Math.abs(delta) > 10) {
+                let rounded = localAverage + delta * 0.45;
 
-              if (isTop) {
-                  rounded = this.clamp(rounded, 0, limit);
-              } else {
-                  rounded = this.clamp(rounded, limit, this.maxHeight);
-              }
+                if (isTop) {
+                    rounded = this.clamp(rounded, 0, limit);
+                } else {
+                    rounded = this.clamp(rounded, limit, this.maxHeight);
+                }
 
-              profile[i].y = Math.round(rounded);
-          }
-      }
+                profile[i].y = Math.round(rounded);
+            }
+        }
     }
 
     drawEdgeLightBand(graphics, profile, isTop, limit) {

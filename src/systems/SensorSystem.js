@@ -2,20 +2,26 @@ export class SensorSystem {
     constructor(collisionSystem) {
         this.collisionSystem = collisionSystem;
 
-        this.rayCount = 8;
         this.maxDistance = 220;
         this.step = 6;
 
-        // ~140 degree forward arc
-        this.localRayOffsets = [
+        this.rearRayOffsets = [
+            -2.3562, // 45° behind, upper side
+            2.3562, // 45° behind, lower side
+        ];
+
+        this.forwardRayOffsets = [
             -1.2217,
-            -0.8727,
-            -0.5236,
-            -0.1745,
-            0.1745,
-            0.5236,
-            0.8727,
+            -0.7330,
+            -0.2443,
+            0.2443,
+            0.7330,
             1.2217,
+        ];
+
+        this.localRayOffsets = [
+            ...this.rearRayOffsets,
+            ...this.forwardRayOffsets,
         ];
     }
 
@@ -33,6 +39,7 @@ export class SensorSystem {
                     distance,
                     normalizedDistance: Math.max(0, Math.min(1, distance / this.maxDistance)),
                     hit: true,
+                    angle,
                 };
             }
         }
@@ -48,6 +55,7 @@ export class SensorSystem {
             distance: this.maxDistance,
             normalizedDistance: 1,
             hit: false,
+            angle,
         };
     }
 

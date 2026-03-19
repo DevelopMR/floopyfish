@@ -99,7 +99,7 @@ export class Game {
     this.world.addChild(this.fish.sprite);
 
     this.spawnSystem = new SpawnSystem(this.world); // handles reef segment spawning and profile generation
-    this.currentSystem = new CurrentSystem(); // handles current forces based on position and time
+    this.currentSystem = new CurrentSystem(this.spawnSystem); // handles current forces based on position and time
     this.collisionSystem = new ReefCollisionSystem(this.spawnSystem); // handles collision checks based on current reef segments
 
     //  handles raycasting for fish vision based on current reef segments
