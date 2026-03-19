@@ -1,4 +1,4 @@
-import { Container, Graphics, TilingSprite, Texture } from "pixi.js";
+import { AnimatedSprite, Container, Graphics, TilingSprite, Texture } from "pixi.js";
 
 class SeededRandom {
     constructor(seed) {
@@ -56,6 +56,10 @@ export class ReefGenerator {
         this.taperWidth = 48;
         this.taperStrength = .8;
 
+        // Current visualization parameters (for debugging)
+        this.pressureBandAlpha = 0.16;
+        this.pressureLineColor = 0xbfefff;
+        this.pressureGlowColor = 0xe8fcff;
 
     }
 
@@ -82,7 +86,7 @@ export class ReefGenerator {
     }
 
     generateSegment(xPosition) {
-        const gapSize = this.random.range(120, 200); // expand gap size range to reduce instances of very tight gaps that are hard to navigate
+        const gapSize = this.random.range(120, 200);
         const gapCenter = this.random.range(175, 650);
         const topLimit = gapCenter - gapSize * 0.5;
         const bottomLimit = gapCenter + gapSize * 0.5;
@@ -96,20 +100,101 @@ export class ReefGenerator {
         this.enforceMinimumGap(topProfile, bottomProfile, 130);
 
         const topGraphic = this.buildCoralContainer(topProfile, true, topLimit);
+        const pressureGraphic = this.buildPressureDisplay(topProfile, bottomProfile);
         const bottomGraphic = this.buildCoralContainer(bottomProfile, false, bottomLimit);
 
         topGraphic.x = xPosition;
+        pressureGraphic.x = xPosition;
         bottomGraphic.x = xPosition;
 
         return {
             x: xPosition,
             width: this.segmentWidth,
             topGraphic,
+            pressureGraphic,
             bottomGraphic,
             topProfile,
             bottomProfile,
         };
     }
+
+    buildPressureDisplay(topProfile, bottomProfile) {
+        const container = new Container();
+
+        const glow = new Graphics();
+        const streaks = new Graphics();
+
+        const points = Math.min(topProfile.length, bottomProfile.length);
+
+        for (let i = 0; i < points - 1; i++) {
+            const topA = topProfile[i];
+            const botA = bottomProfile[i];
+            const topB = topProfile[i + 1];
+            const botB = bottomProfile[i + 1];
+
+            const centerYA = (topA.y + botA.y) * 0.5;
+            const centerYB = (topB.y + botB.y) * 0.5;
+
+            const gapA = botA.y - topA.y;
+            const gapB = botB.y - topB.y;
+            const avgGap = (gapA + gapB) * 0.5;
+
+            const tightness = 1 - this.clamp((avgGap - 120) / 100, 0, 1);
+
+            const bandHalfHeight = Math.max(10, avgGap * (0.18 + tightness * 0.12));
+            const alpha = this.pressureBandAlpha * (0.45 + tightness * 0.9);
+
+            const bandPath = [
+                topA.x, centerYA - bandHalfHeight,
+                topB.x, centerYB - bandHalfHeight,
+                topB.x, centerYB + bandHalfHeight,
+                topA.x, centerYA + bandHalfHeight,
+            ];
+
+            glow.poly(bandPath).fill({
+                color: this.pressureGlowColor,
+                alpha,
+            });
+
+            streaks.moveTo(topA.x, centerYA);
+            streaks.lineTo(topB.x, centerYB);
+            streaks.stroke({
+                width: 1.5 + tightness * 1.5,
+                color: this.pressureLineColor,
+                alpha: 0.18 + tightness * 0.28,
+            });
+
+            const offset = Math.max(6, bandHalfHeight * 0.45);
+
+            streaks.moveTo(topA.x, centerYA - offset);
+            streaks.lineTo(topB.x, centerYB - offset);
+            streaks.stroke({
+                width: 1,
+                color: this.pressureLineColor,
+                alpha: 0.08 + tightness * 0.16,
+            });
+
+            streaks.moveTo(topA.x, centerYA + offset);
+            streaks.lineTo(topB.x, centerYB + offset);
+            streaks.stroke({
+                width: 1,
+                color: this.pressureLineColor,
+                alpha: 0.08 + tightness * 0.16,
+            });
+        }
+
+        container.addChild(glow);
+        container.addChild(streaks);
+
+        container.pressureGlow = glow;
+        container.pressureStreaks = streaks;
+        container.baseAlpha = 1;
+        container.phase = this.random.range(0, Math.PI * 2);
+        container.tightnessBias = this.random.range(0.9, 1.15);
+
+        return container;
+    }
+
 
     createBranchField(limit, isTop) {
         const nodes = [];
