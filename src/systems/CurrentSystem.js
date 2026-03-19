@@ -5,12 +5,12 @@ export class CurrentSystem {
     this.ambientStrength = 0.03;
 
     this.segmentInfluenceRadius = 180;
-    this.gapPressureStrength = 0.12;
+    this.gapPressureStrength = 0.16;
     this.gapCenteringStrength = 0.035;
 
     this.rightRampStart = 760;
     this.rightRampEnd = 1230;
-    this.rightRampStrength = 0.22;
+    this.rightRampStrength = 0.28;
   }
 
   getForce(x, y, time) {
