@@ -3,35 +3,46 @@ export class ReefCollisionSystem {
         this.spawnSystem = spawnSystem;
     }
 
-    checkFishCollision(fish) {
-        const fishX = fish.position.x;
-        const fishY = fish.position.y;
+    getProfileIndex(localX, reefGen, profileLength) {
+        const rawIndex = Math.floor(localX / reefGen.sampleStep);
+        return Math.max(0, Math.min(profileLength - 1, rawIndex));
+    }
 
+    isPointInCoral(x, y) {
         const reefGen = this.spawnSystem.reefGen;
 
         for (const seg of this.spawnSystem.segments) {
             const left = seg.x;
             const right = seg.x + seg.width;
 
-            if (fishX < left || fishX > right) {
+            if (x < left || x > right) {
                 continue;
             }
 
-            const localX = fishX - left;
+            const localX = x - left;
 
+            // Safe seam area on the right side of each segment
             if (localX > reefGen.coralBodyWidth) {
-                continue;
+                return false;
             }
 
-            const index = Math.floor(localX / reefGen.sampleStep);
-            const top = seg.topProfile[index]?.y ?? 0;
-            const bottom = seg.bottomProfile[index]?.y ?? reefGen.maxHeight;
+            const topIndex = this.getProfileIndex(localX, reefGen, seg.topProfile.length);
+            const bottomIndex = this.getProfileIndex(localX, reefGen, seg.bottomProfile.length);
 
-            if (fishY < top || fishY > bottom) {
+            const top = seg.topProfile[topIndex]?.y ?? 0;
+            const bottom = seg.bottomProfile[bottomIndex]?.y ?? reefGen.maxHeight;
+
+            if (y < top || y > bottom) {
                 return true;
             }
+
+            return false;
         }
 
         return false;
+    }
+
+    checkFishCollision(fish) {
+        return this.isPointInCoral(fish.position.x, fish.position.y);
     }
 }

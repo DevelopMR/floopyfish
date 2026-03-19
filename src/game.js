@@ -1,9 +1,10 @@
-import { Application, Assets, Container, TilingSprite, Texture } from "pixi.js";
+import { Application, Assets, Container, Graphics, TilingSprite, Texture } from "pixi.js";
 import { Fish } from "./entities/Fish.js";
 import { SpawnSystem } from "./systems/SpawnSystem.js";
 import { CurrentSystem } from "./systems/CurrentSystem.js";
 import { KeyboardController } from "./input/KeyboardController.js";
 import { ReefCollisionSystem } from "./systems/ReefCollisionSystem.js";
+import { SensorSystem } from "./systems/SensorSystem.js";
 
 export class Game {
 
@@ -19,6 +20,7 @@ export class Game {
 
     document.body.appendChild(this.app.canvas);
 
+    // get images ready
     await Assets.load([
       "assets/lionfish75.png",
       "assets/coral_texture2.png",
@@ -27,6 +29,7 @@ export class Game {
       "assets/caustics_tile.png",
     ]);
 
+    // build background scene graphics
     this.backgroundLayer = new Container();
     this.app.stage.addChild(this.backgroundLayer);
 
@@ -49,10 +52,12 @@ export class Game {
     this.backgroundLayer.addChild(this.bgFar);
     this.backgroundLayer.addChild(this.bgMid);
 
-
+    // tint backgrounds to better match caustics and foreground coral
     this.bgFar.tint = 0x88bbcc;
     this.bgMid.tint = 0xaacccc;
 
+
+    // floaty lighting caustics layers
     this.world = new Container();
     this.app.stage.addChild(this.world);
 
@@ -87,15 +92,29 @@ export class Game {
     this.causticsLayer.addChild(this.causticsB);
 
 
+    // input controller
     this.controller = new KeyboardController();
 
     this.fish = new Fish(300, 360);
     this.world.addChild(this.fish.sprite);
 
-    this.spawnSystem = new SpawnSystem(this.world);
-    this.currentSystem = new CurrentSystem();
-    this.collisionSystem = new ReefCollisionSystem(this.spawnSystem);
+    this.spawnSystem = new SpawnSystem(this.world); // handles reef segment spawning and profile generation
+    this.currentSystem = new CurrentSystem(); // handles current forces based on position and time
+    this.collisionSystem = new ReefCollisionSystem(this.spawnSystem); // handles collision checks based on current reef segments
 
+    //  handles raycasting for fish vision based on current reef segments
+    this.sensorSystem = new SensorSystem(this.collisionSystem);
+
+    // debug layer for raycasting visualization
+    this.debugLayer = new Container();
+    this.app.stage.addChild(this.debugLayer);
+
+    this.rayDebug = new Graphics();
+    this.debugLayer.addChild(this.rayDebug);
+
+    this.lastRayResults = [];
+
+    // time accumulator for current system
     this.time = 0;
 
   }
@@ -108,30 +127,56 @@ export class Game {
 
   }
 
-  update(delta)
-  {
+  // debug function to visualize raycasting results
+  drawRayDebug(rayResults) {
+    this.rayDebug.clear();
 
-    this.time += delta * 0.01;
+    for (const ray of rayResults) {
+      const color = ray.hit ? 0xff6644 : 0x66e0ff;
+      const alpha = ray.hit ? 0.95 : 0.55;
 
+      this.rayDebug.moveTo(ray.startX, ray.startY);
+      this.rayDebug.lineTo(ray.endX, ray.endY);
+      this.rayDebug.stroke({ width: 2, color, alpha });
+
+      if (ray.hit) {
+        this.rayDebug.circle(ray.endX, ray.endY, 3);
+        this.rayDebug.fill({ color: 0xffffff, alpha: 0.95 });
+      }
+    }
+  }
+
+  update(delta) {
+
+    this.time += delta * 0.01; // scaled time for more manageable numbers
+
+    // get current forces for this frame
     const current = this.currentSystem.getForce(
       this.fish.position.x,
       this.fish.position.y,
       this.time
     );
 
+    // update fish with current input and forces
     this.fish.update(delta, this.controller, current);
 
+    // scroll backgrounds
     this.bgFar.tilePosition.x -= 0.3 * delta;
     this.bgMid.tilePosition.x -= 0.8 * delta;
 
+    // spawns segments and updates profiles
     this.spawnSystem.update(delta);
 
-    if (this.collisionSystem.checkFishCollision(this.fish))
-    {
-        console.log("fish crashed");
+    // raycasting for debug visualization
+    this.lastRayResults = this.sensorSystem.getVisionReadings(this.fish);   // get raycast results for debug drawing
+    this.drawRayDebug(this.lastRayResults);  // draws raycasts for debugging
+
+    // collision check
+    if (this.collisionSystem.checkFishCollision(this.fish)) {
+      console.log("fish crashed");
     }
 
-
+    // animate caustics
     this.causticsA.tilePosition.x -= 0.45 * delta;
     this.causticsA.tilePosition.y += 0.12 * delta;
 
@@ -145,5 +190,5 @@ export class Game {
     this.causticsB.alpha = 0.07 + Math.sin(this.causticsTime * 1.3 + 1.7) * 0.018;
 
   }
-  }
+}
 
