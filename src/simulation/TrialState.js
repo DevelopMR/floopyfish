@@ -16,6 +16,11 @@ export function createTrialState(spawnX, spawnY) {
         framesSinceProgress: 0,
 
         passedSegments: new Set(),
+
+        isDying: false,
+        deathFrames: 0,
+        deathFloatFrames: 240, // ~4 seconds at 60 fps
+        deathResolved: false,
     };
 }
 
@@ -26,6 +31,29 @@ export function resetLoopState(trial, fishX) {
     trial.passedSegments.clear();
 }
 
-export function killTrial(trial) {
+export function beginDeath(trial) {
+    if (trial.isDying || trial.deathResolved) {
+        return;
+    }
+
     trial.alive = false;
+    trial.isDying = true;
+    trial.deathFrames = 0;
+}
+
+export function updateDeathState(trial) {
+    if (!trial.isDying || trial.deathResolved) {
+        return;
+    }
+
+    trial.deathFrames += 1;
+
+    if (trial.deathFrames >= trial.deathFloatFrames) {
+        trial.isDying = false;
+        trial.deathResolved = true;
+    }
+}
+
+export function killTrial(trial) {
+    beginDeath(trial);
 }

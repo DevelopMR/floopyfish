@@ -52,20 +52,38 @@ export class Fish {
     this.sprite.y = y;
   }
 
+  updateDeadFloat(delta, current) {
+    this.velocity.x *= 0.985;
+    this.velocity.y *= 0.985;
+
+    this.velocity.x += (current?.x ?? 0) * 0.35;
+    this.velocity.y += (current?.y ?? 0) * 0.35;
+
+    // gentle buoyancy upward
+    this.velocity.y -= 0.02 * delta;
+
+    this.position.x += this.velocity.x;
+    this.position.y += this.velocity.y;
+
+    this.sprite.x = this.position.x;
+    this.sprite.y = this.position.y;
+
+    const targetRotation = -1.2;
+    this.facingRotation += (targetRotation - this.facingRotation) * 0.04;
+    this.sprite.rotation = this.facingRotation;
+  }
+
   update(delta, controller, current) {
     const { thrustX, thrustY } = this.getControlIntent(controller);
 
     this.velocity.x += thrustX;
     this.velocity.y += thrustY;
 
-    // slight forward drift
     this.velocity.x += 0.05;
 
-    // current
     this.velocity.x += current.x;
     this.velocity.y += current.y;
 
-    // damping
     this.velocity.x *= 0.98;
     this.velocity.y *= 0.98;
 

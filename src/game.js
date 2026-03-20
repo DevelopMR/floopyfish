@@ -101,8 +101,6 @@ export class Game {
     this.fitnessSystem = new FitnessSystem(this.difficultySystem);
     this.gapRewardSystem = new GapRewardSystem(this.fitnessSystem);
 
-    this.trial = createTrialState(this.fish.position.x, this.fish.position.y);
-
     this.baseEnvironmentConfig = {
       gapCurrentForce: this.currentSystem.baseGapPressureStrength,
       farRightCurrentForce: this.currentSystem.baseRightRampStrength,
@@ -120,6 +118,8 @@ export class Game {
       worldHeight: 720,
     });
 
+    this.startNewTrial();
+
     this.debugLayer = new Container();
     this.app.stage.addChild(this.debugLayer);
 
@@ -129,6 +129,14 @@ export class Game {
     this.lastRayResults = [];
     this.time = 0;
     this.causticsTime = 0;
+    this.loggedDeath = false;
+  }
+
+  startNewTrial() {
+    const safeSpawn = this.spawnSystem.getSafeLoopSpawn(this.fish.radius);
+    this.fish.resetForLoop(safeSpawn.x, safeSpawn.y);
+    this.trial = createTrialState(this.fish.position.x, this.fish.position.y);
+    this.loggedDeath = false;
   }
 
   start() {
@@ -183,31 +191,35 @@ export class Game {
     );
 
     this.currentSystem.setEnvironment(environment);
-
     this.spawnSystem.update(delta);
 
-    if (this.trial.alive) {
-      const current = this.currentSystem.getForce(
-        this.fish.position.x,
-        this.fish.position.y,
-        this.time
-      );
+    const current = this.currentSystem.getForce(
+      this.fish.position.x,
+      this.fish.position.y,
+      this.time
+    );
 
+    if (this.trial.alive) {
       this.fish.update(delta, this.controller, current);
-      this.trialSystem.update(this.fish, this.trial);
+    } else if (this.trial.isDying) {
+      this.fish.updateDeadFloat(delta, current);
     }
+
+    this.trialSystem.update(this.fish, this.trial);
 
     this.lastRayResults = this.sensorSystem.getVisionReadings(this.fish);
     this.drawRayDebug(this.lastRayResults);
 
     this.updateEnvironmentVisuals(environment, delta);
 
-    if (!this.trial.alive) {
+    if (this.trial.deathResolved && !this.loggedDeath) {
+      this.loggedDeath = true;
       console.log("trial ended", {
         fitness: this.trial.fitness,
         loopsCompleted: this.trial.loopsCompleted,
         totalGapPasses: this.trial.totalGapPasses,
       });
+      this.startNewTrial();
     }
   }
 }

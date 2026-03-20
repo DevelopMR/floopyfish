@@ -1,4 +1,4 @@
-import { killTrial, resetLoopState } from "./TrialState.js";
+import { killTrial, resetLoopState, updateDeathState } from "./TrialState.js";
 
 export class TrialSystem {
     constructor({
@@ -42,6 +42,11 @@ export class TrialSystem {
     }
 
     update(fish, trial) {
+        if (trial.isDying) {
+            updateDeathState(trial);
+            return;
+        }
+
         if (!trial.alive) {
             return;
         }
