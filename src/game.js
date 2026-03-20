@@ -12,6 +12,8 @@ import { GapRewardSystem } from "./simulation/GapRewardSystem.js";
 import { TrialSystem } from "./simulation/TrialSystem.js";
 import { HudOverlay } from "./ui/HudOverlay.js";
 import { BrainOverlay } from "./ui/BrainOverlay.js";
+import { FishController } from "./ai/FishController.js";
+import { NeuralInputBuilder } from "./ai/NeuralInputBuilder.js";
 
 export class Game {
   async init() {
@@ -94,7 +96,7 @@ export class Game {
     this.causticsLayer.addChild(this.causticsB);
 
     // Input controller
-    this.controller = new KeyboardController();
+    //this.controller = new KeyboardController(); // hidden during bot testing
 
     // Create the fish entity 
     this.fish = new Fish(300, 360);
@@ -104,6 +106,15 @@ export class Game {
     this.currentSystem = new CurrentSystem(this.spawnSystem);
     this.collisionSystem = new ReefCollisionSystem(this.spawnSystem);
     this.sensorSystem = new SensorSystem(this.collisionSystem);
+
+    this.neuralInputBuilder = new NeuralInputBuilder({
+      worldWidth: 1280,
+      worldHeight: 720,
+    });
+
+    this.controller = new FishController({
+      inputBuilder: this.neuralInputBuilder,
+    });
 
     this.difficultySystem = new DifficultySystem();
     this.fitnessSystem = new FitnessSystem(this.difficultySystem);
@@ -221,22 +232,32 @@ export class Game {
     this.currentSystem.setEnvironment(environment);
     this.spawnSystem.update(delta);
 
+
     const current = this.currentSystem.getForce(
       this.fish.position.x,
       this.fish.position.y,
       this.time
     );
 
+    this.lastRayResults = this.sensorSystem.getVisionReadings(this.fish);
+
     if (this.trial.alive) {
+      this.controller.update({
+        fish: this.fish,
+        rayResults: this.lastRayResults,
+        current,
+      });
+
       this.fish.update(delta, this.controller, current);
     } else if (this.trial.isDying) {
       this.fish.updateDeadFloat(delta, current);
     }
 
     this.trialSystem.update(this.fish, this.trial);
-
-    this.lastRayResults = this.sensorSystem.getVisionReadings(this.fish);
     this.drawRayDebug(this.lastRayResults);
+
+
+
 
     this.updateEnvironmentVisuals(environment, delta);
 
@@ -256,12 +277,8 @@ export class Game {
     });
 
     this.brainOverlay.update({
-      // placeholder values for now
-      inputs: [
-        0.10, 0.18, 0.29, 0.35, 0.46, 0.59, 0.66, 0.78,
-        0.22, 0.41, 0.57, 0.31, 0.73, 0.87,
-      ],
-      outputs: [0.62, -0.31],
+      inputs: this.controller.lastInputs,
+      outputs: this.controller.lastOutputs,
     });
 
   }
