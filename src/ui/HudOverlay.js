@@ -73,6 +73,17 @@ export class HudOverlay {
         });
         this.root.addChild(this.modeIconSprite);
 
+        // bigger hit area for easier clicking, since the mode icon can be small
+        this.modeButtonHitArea = new Graphics();
+        this.modeButtonHitArea.eventMode = "static";
+        this.modeButtonHitArea.cursor = "pointer";
+        this.modeButtonHitArea.alpha = 0.001;
+        this.modeButtonHitArea.on("pointertap", () => {
+            this.onModeButtonPressed?.();
+        });
+        this.root.addChild(this.modeButtonHitArea);
+
+
         this.mode = "human";
         this.onModeButtonPressed = null;
 
@@ -234,6 +245,18 @@ export class HudOverlay {
         this.drawCard(statsCard.x, statsCard.y, statsCard.w, statsCard.h);
         this.drawCard(iconCard.x, iconCard.y, iconCard.w, iconCard.h);
 
+        // update mode button hit area to match icon card
+        this.modeButtonHitArea.clear();
+        this.modeButtonHitArea.roundRect(
+            iconCard.x,
+            iconCard.y,
+            iconCard.w,
+            iconCard.h,
+            14 * this.panelScale
+        );
+        this.modeButtonHitArea.fill({ color: 0xffffff, alpha: 0.001 });
+
+        // divider between stats and mode icon
         const dividerX = statsCard.x + statsCard.w * 0.55;
         this.panel.moveTo(dividerX, statsCard.y + 8 * this.panelScale);
         this.panel.lineTo(dividerX, statsCard.y + statsCard.h - 8 * this.panelScale);
