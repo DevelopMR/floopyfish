@@ -13,18 +13,47 @@ export class Fish {
 
     this.facingRotation = 0;
     this.sprite.rotation = 0;
+
+    this.radius = 12;
   }
 
-  update(delta, controller, current) {
+  getControlIntent(controller) {
     const accel = 0.35;
 
     let thrustX = 0;
     let thrustY = 0;
 
-    if (controller.isDown("KeyW")) thrustY -= accel;
-    if (controller.isDown("KeyS")) thrustY += accel;
-    if (controller.isDown("KeyD")) thrustX += accel;
-    if (controller.isDown("KeyA")) thrustX -= accel * 0.65;
+    if (controller?.getOutput) {
+      const output = controller.getOutput(this) || {};
+      thrustX = output.thrustX ?? 0;
+      thrustY = output.thrustY ?? 0;
+      return { thrustX, thrustY };
+    }
+
+    if (controller?.isDown?.("KeyW")) thrustY -= accel;
+    if (controller?.isDown?.("KeyS")) thrustY += accel;
+    if (controller?.isDown?.("KeyD")) thrustX += accel;
+    if (controller?.isDown?.("KeyA")) thrustX -= accel * 0.65;
+
+    return { thrustX, thrustY };
+  }
+
+  resetForLoop(x, y) {
+    this.position.x = x;
+    this.position.y = y;
+
+    this.velocity.x = 0;
+    this.velocity.y = 0;
+
+    this.facingRotation = 0;
+    this.sprite.rotation = 0;
+
+    this.sprite.x = x;
+    this.sprite.y = y;
+  }
+
+  update(delta, controller, current) {
+    const { thrustX, thrustY } = this.getControlIntent(controller);
 
     this.velocity.x += thrustX;
     this.velocity.y += thrustY;
@@ -46,12 +75,7 @@ export class Fish {
     this.sprite.x = this.position.x;
     this.sprite.y = this.position.y;
 
-    // Helicopter-style attitude:
-    // backward intent -> nose up
-    // forward intent -> nose down
     const pitchFromHorizontalIntent = -thrustX * 0.5;
-
-    // Optional small influence from vertical thrust so W/S still feels alive
     const pitchFromVerticalIntent = thrustY * 0.35;
 
     const targetRotation = -(pitchFromHorizontalIntent + pitchFromVerticalIntent);

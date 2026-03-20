@@ -116,4 +116,53 @@ export class SpawnSystem {
 
     }
 
+    // utility for finding the leftmost segment, used for determining safe spawn zones in the starting area
+    getLeftmostSegment() {
+        if (this.segments.length === 0) {
+            return null;
+        }
+
+        let leftmost = this.segments[0];
+
+        for (const seg of this.segments) {
+            if (seg.x < leftmost.x) {
+                leftmost = seg;
+            }
+        }
+
+        return leftmost;
+    }
+
+    // determines a safe spawn point for loop restarts based on the leftmost segment's profiles
+    getSafeLoopSpawn(fishRadius = 12) {
+        const seg = this.getLeftmostSegment();
+
+        if (!seg) {
+            return { x: 160, y: 360 };
+        }
+
+        const reefGen = this.reefGen;
+        const sampleIndex = Math.max(
+            0,
+            Math.min(
+                seg.topProfile.length - 1,
+                Math.floor(seg.topProfile.length * 0.25)
+            )
+        );
+
+        const top = seg.topProfile[sampleIndex]?.y ?? 220;
+        const bottom = seg.bottomProfile[sampleIndex]?.y ?? 420;
+
+        const gapCenterY = (top + bottom) * 0.5;
+        const safePadding = fishRadius * 2;
+
+        const minY = top + safePadding;
+        const maxY = bottom - safePadding;
+
+        return {
+            x: seg.x + 40,
+            y: Math.max(minY, Math.min(gapCenterY, maxY)),
+        };
+    }
+
 }
