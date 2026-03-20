@@ -5,12 +5,23 @@ export class CurrentSystem {
     this.ambientStrength = 0.03;
 
     this.segmentInfluenceRadius = 180;
-    this.gapPressureStrength = 0.16;
+    this.baseGapPressureStrength = 0.16;
+    this.gapPressureStrength = this.baseGapPressureStrength;
+
     this.gapCenteringStrength = 0.035;
 
     this.rightRampStart = 760;
     this.rightRampEnd = 1230;
-    this.rightRampStrength = 0.28;
+    this.baseRightRampStrength = 0.28;
+    this.rightRampStrength = this.baseRightRampStrength;
+  }
+
+  setEnvironment(environment) {
+    this.gapPressureStrength =
+      environment?.gapCurrentForce ?? this.baseGapPressureStrength;
+
+    this.rightRampStrength =
+      environment?.farRightCurrentForce ?? this.baseRightRampStrength;
   }
 
   getForce(x, y, time) {
@@ -65,10 +76,7 @@ export class CurrentSystem {
       const verticalNorm = Math.abs(verticalOffset) / (gapSize * 0.5 + 1);
       const verticalAlignment = Math.max(0, 1 - verticalNorm);
 
-      // Strongest leftward pressure near the gap centerline
       totalX += -this.gapPressureStrength * horizontalFalloff * verticalAlignment;
-
-      // Gentle vertical flow toward the center of the channel
       totalY += (-Math.sign(verticalOffset)) * this.gapCenteringStrength * horizontalFalloff;
     }
 
@@ -82,8 +90,6 @@ export class CurrentSystem {
 
     const tRaw = (x - this.rightRampStart) / (this.rightRampEnd - this.rightRampStart);
     const t = this.clamp(tRaw, 0, 1);
-
-    // smoothstep
     const eased = t * t * (3 - 2 * t);
 
     return {
