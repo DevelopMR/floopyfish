@@ -1,18 +1,26 @@
 export class DifficultySystem {
     getGapCurrentMultiplier(loopNumber) {
-        return 1 + loopNumber * 0.12;
+        const startingMultiplier = 0.60; // 40% easier on first loop
+        const loopStep = 0.12;
+        return startingMultiplier + loopNumber * loopStep;
     }
 
     getFarRightCurrentMultiplier(loopNumber) {
-        return 1 + loopNumber * 0.20;
+        const startingMultiplier = 0.60; // 40% easier on first loop
+        const loopStep = 0.20;
+        return startingMultiplier + loopNumber * loopStep;
     }
 
     getCoralMotionSpeedMultiplier(loopNumber) {
-        return 1 + loopNumber * 0.10;
+        const startingMultiplier = 0.60; // 40% slower on first loop
+        const loopStep = 0.10;
+        return startingMultiplier + loopNumber * loopStep;
     }
 
     getWaveAmplitudeMultiplier(loopNumber) {
-        return 1 + loopNumber * 0.14;
+        const startingMultiplier = 0.60; // calmer first loop
+        const loopStep = 0.14;
+        return startingMultiplier + loopNumber * loopStep;
     }
 
     getLoopCompletionReward(loopNumber) {

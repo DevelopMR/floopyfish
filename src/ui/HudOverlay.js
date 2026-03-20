@@ -7,7 +7,7 @@ export class HudOverlay {
         this.panelScale = panelScale;
 
         this.root = new Container();
-        this.root.eventMode = "none";
+        this.root.eventMode = "passive";
 
         this.layout = {
             x: 18,
@@ -66,11 +66,11 @@ export class HudOverlay {
         this.modeIconTextures = null;
         this.modeIconSprite = new Sprite();
         this.modeIconSprite.visible = false;
-        this.modeIconSprite.eventMode = "static";
-        this.modeIconSprite.cursor = "pointer";
-        this.modeIconSprite.on("pointertap", () => {
+        this.modeIconSprite.eventMode = "none";
+        this.modeIconSprite.cursor = "default";
+        /* this.modeIconSprite.on("pointertap", () => {
             this.onModeButtonPressed?.();
-        });
+        }); */
         this.root.addChild(this.modeIconSprite);
 
         // bigger hit area for easier clicking, since the mode icon can be small
