@@ -10,10 +10,12 @@ import { createTrialState } from "./simulation/TrialState.js";
 import { FitnessSystem } from "./simulation/FitnessSystem.js";
 import { GapRewardSystem } from "./simulation/GapRewardSystem.js";
 import { TrialSystem } from "./simulation/TrialSystem.js";
+import { HudOverlay } from "./ui/HudOverlay.js";
+import { BrainOverlay } from "./ui/BrainOverlay.js";
 
 export class Game {
   async init() {
-    this.app = new Application();
+    this.app = new Application(); // default to 800x600, we'll resize later
 
     await this.app.init({
       width: 1280,
@@ -29,8 +31,10 @@ export class Game {
       "assets/reef_bg_far.png",
       "assets/reef_bg_mid.png",
       "assets/caustics_tile.png",
+      "assets/FloopyFish_logo.png",
     ]);
 
+    // Set up layers, background layers first
     this.backgroundLayer = new Container();
     this.app.stage.addChild(this.backgroundLayer);
 
@@ -56,9 +60,11 @@ export class Game {
     this.bgFar.tint = 0x88bbcc;
     this.bgMid.tint = 0xaacccc;
 
+    // world layer will hold the fish and reefs
     this.world = new Container();
     this.app.stage.addChild(this.world);
 
+    // Caustics layer
     this.causticsLayer = new Container();
     this.app.stage.addChild(this.causticsLayer);
 
@@ -87,8 +93,10 @@ export class Game {
     this.causticsLayer.addChild(this.causticsA);
     this.causticsLayer.addChild(this.causticsB);
 
+    // Input controller
     this.controller = new KeyboardController();
 
+    // Create the fish entity 
     this.fish = new Fish(300, 360);
     this.world.addChild(this.fish.sprite);
 
@@ -108,6 +116,7 @@ export class Game {
       waveAmplitude: 1,
     };
 
+    // Trial system manages the state of each trial, including fitness evaluation and loop progression
     this.trialSystem = new TrialSystem({
       fitnessSystem: this.fitnessSystem,
       gapRewardSystem: this.gapRewardSystem,
@@ -120,13 +129,32 @@ export class Game {
 
     this.startNewTrial();
 
+    // debug layer
     this.debugLayer = new Container();
     this.app.stage.addChild(this.debugLayer);
-
     this.rayDebug = new Graphics();
     this.debugLayer.addChild(this.rayDebug);
 
-    this.lastRayResults = [];
+    // HUD and Brain overlays
+    this.uiLayer = new Container();
+    this.app.stage.addChild(this.uiLayer);
+
+    this.hudOverlay = new HudOverlay({ width: 1280, height: 720 });
+    this.uiLayer.addChild(this.hudOverlay.root);
+
+    this.brainOverlay = new BrainOverlay({
+      width: 1280,
+      height: 720,
+      architecture: [14, 12, 8, 2],
+      outputLabels: ["thrust X", "thrust Y"],
+    });
+    this.uiLayer.addChild(this.brainOverlay.root);
+
+    const logoTexture = Texture.from("assets/FloopyFish_logo.png");
+    this.hudOverlay.setLogoTexture(logoTexture);
+
+
+    this.lastRayResults = []; // store last ray results for debug drawing
     this.time = 0;
     this.causticsTime = 0;
     this.loggedDeath = false;
@@ -221,5 +249,20 @@ export class Game {
       });
       this.startNewTrial();
     }
+
+    this.hudOverlay.update({
+      score: this.trial.fitness,
+      loopCount: this.trial.loopsCompleted,
+    });
+
+    this.brainOverlay.update({
+      // placeholder values for now
+      inputs: [
+        0.10, 0.18, 0.29, 0.35, 0.46, 0.59, 0.66, 0.78,
+        0.22, 0.41, 0.57, 0.31, 0.73, 0.87,
+      ],
+      outputs: [0.62, -0.31],
+    });
+
   }
 }
