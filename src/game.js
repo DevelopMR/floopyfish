@@ -14,15 +14,17 @@ import { HudOverlay } from "./ui/HudOverlay.js";
 import { BrainOverlay } from "./ui/BrainOverlay.js";
 import { FishController } from "./ai/FishController.js";
 import { NeuralInputBuilder } from "./ai/NeuralInputBuilder.js";
+import { PlayerKeyboardController } from "./ai/PlayerKeyboardController.js";
+import { ScriptedController } from "./ai/ScriptedController.js";
 
 export class Game {
   async init() {
-    this.app = new Application(); // default to 800x600, we'll resize later
+    this.app = new Application();
 
     await this.app.init({
       width: 1280,
       height: 720,
-      background: "#003344"
+      background: "#003344",
     });
 
     document.body.appendChild(this.app.canvas);
@@ -34,9 +36,9 @@ export class Game {
       "assets/reef_bg_mid.png",
       "assets/caustics_tile.png",
       "assets/FloopyFish_logo.png",
+      "assets/Player_Mode_icons.png",
     ]);
 
-    // Set up layers, background layers first
     this.backgroundLayer = new Container();
     this.app.stage.addChild(this.backgroundLayer);
 
@@ -62,11 +64,9 @@ export class Game {
     this.bgFar.tint = 0x88bbcc;
     this.bgMid.tint = 0xaacccc;
 
-    // world layer will hold the fish and reefs
     this.world = new Container();
     this.app.stage.addChild(this.world);
 
-    // Caustics layer
     this.causticsLayer = new Container();
     this.app.stage.addChild(this.causticsLayer);
 
@@ -95,10 +95,8 @@ export class Game {
     this.causticsLayer.addChild(this.causticsA);
     this.causticsLayer.addChild(this.causticsB);
 
-    // Input controller
-    //this.controller = new KeyboardController(); // hidden during bot testing
+    this.keyboard = new KeyboardController();
 
-    // Create the fish entity 
     this.fish = new Fish(300, 360);
     this.world.addChild(this.fish.sprite);
 
@@ -112,9 +110,19 @@ export class Game {
       worldHeight: 720,
     });
 
-    this.controller = new FishController({
+    this.humanController = new PlayerKeyboardController(this.keyboard);
+
+    this.fishController = new FishController({
       inputBuilder: this.neuralInputBuilder,
     });
+
+    this.botController = new ScriptedController({
+      worldWidth: 1280,
+      worldHeight: 720,
+    });
+
+    this.controllerModeOrder = ["human", "fish", "bot"];
+    this.controllerMode = "human";
 
     this.difficultySystem = new DifficultySystem();
     this.fitnessSystem = new FitnessSystem(this.difficultySystem);
@@ -127,7 +135,6 @@ export class Game {
       waveAmplitude: 1,
     };
 
-    // Trial system manages the state of each trial, including fitness evaluation and loop progression
     this.trialSystem = new TrialSystem({
       fitnessSystem: this.fitnessSystem,
       gapRewardSystem: this.gapRewardSystem,
@@ -140,13 +147,12 @@ export class Game {
 
     this.startNewTrial();
 
-    // debug layer
     this.debugLayer = new Container();
     this.app.stage.addChild(this.debugLayer);
+
     this.rayDebug = new Graphics();
     this.debugLayer.addChild(this.rayDebug);
 
-    // HUD and Brain overlays
     this.uiLayer = new Container();
     this.app.stage.addChild(this.uiLayer);
 
@@ -164,8 +170,14 @@ export class Game {
     const logoTexture = Texture.from("assets/FloopyFish_logo.png");
     this.hudOverlay.setLogoTexture(logoTexture);
 
+    const modeIconsTexture = Texture.from("assets/Player_Mode_icons.png");
+    this.hudOverlay.setModeIconTextureStrip(modeIconsTexture, ["human", "fish", "bot"]);
+    this.hudOverlay.setMode(this.controllerMode);
+    this.hudOverlay.onModeButtonPressed = () => {
+      this.cycleControllerMode();
+    };
 
-    this.lastRayResults = []; // store last ray results for debug drawing
+    this.lastRayResults = [];
     this.time = 0;
     this.causticsTime = 0;
     this.loggedDeath = false;
@@ -176,6 +188,25 @@ export class Game {
     this.fish.resetForLoop(safeSpawn.x, safeSpawn.y);
     this.trial = createTrialState(this.fish.position.x, this.fish.position.y);
     this.loggedDeath = false;
+  }
+
+  getActiveController() {
+    switch (this.controllerMode) {
+      case "human":
+        return this.humanController;
+      case "bot":
+        return this.botController;
+      case "fish":
+      default:
+        return this.fishController;
+    }
+  }
+
+  cycleControllerMode() {
+    const currentIndex = this.controllerModeOrder.indexOf(this.controllerMode);
+    const nextIndex = (currentIndex + 1) % this.controllerModeOrder.length;
+    this.controllerMode = this.controllerModeOrder[nextIndex];
+    this.hudOverlay.setMode(this.controllerMode);
   }
 
   start() {
@@ -232,7 +263,6 @@ export class Game {
     this.currentSystem.setEnvironment(environment);
     this.spawnSystem.update(delta);
 
-
     const current = this.currentSystem.getForce(
       this.fish.position.x,
       this.fish.position.y,
@@ -241,23 +271,25 @@ export class Game {
 
     this.lastRayResults = this.sensorSystem.getVisionReadings(this.fish);
 
-    if (this.trial.alive) {
-      this.controller.update({
-        fish: this.fish,
-        rayResults: this.lastRayResults,
-        current,
-      });
+    const activeController = this.getActiveController();
 
-      this.fish.update(delta, this.controller, current);
+    if (this.trial.alive) {
+      if (activeController?.update) {
+        activeController.update({
+          fish: this.fish,
+          rayResults: this.lastRayResults,
+          current,
+          trial: this.trial,
+        });
+      }
+
+      this.fish.update(delta, activeController, current);
     } else if (this.trial.isDying) {
       this.fish.updateDeadFloat(delta, current);
     }
 
     this.trialSystem.update(this.fish, this.trial);
     this.drawRayDebug(this.lastRayResults);
-
-
-
 
     this.updateEnvironmentVisuals(environment, delta);
 
@@ -274,12 +306,12 @@ export class Game {
     this.hudOverlay.update({
       score: this.trial.fitness,
       loopCount: this.trial.loopsCompleted,
+      mode: this.controllerMode,
     });
 
     this.brainOverlay.update({
-      inputs: this.controller.lastInputs,
-      outputs: this.controller.lastOutputs,
+      inputs: activeController?.lastInputs ?? new Array(14).fill(0),
+      outputs: activeController?.lastOutputs ?? [0, 0],
     });
-
   }
 }
