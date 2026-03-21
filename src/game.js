@@ -325,8 +325,8 @@ export class Game {
     const coralSpeed = environment?.coralMotionSpeed ?? 1;
     const waveAmp = environment?.waveAmplitude ?? 1;
 
-    this.bgFar.tilePosition.x -= 0.3 * delta * (0.9 + 0.1 * waveAmp);
-    this.bgMid.tilePosition.x -= 0.8 * delta * (0.9 + 0.1 * waveAmp);
+    this.bgFar.tilePosition.x -= 0.15 * delta * coralSpeed * (0.9 + 0.1 * waveAmp);
+    this.bgMid.tilePosition.x -= 0.4 * delta * coralSpeed * (0.9 + 0.1 * waveAmp);
 
     this.causticsA.tilePosition.x -= 0.45 * delta * coralSpeed;
     this.causticsA.tilePosition.y += 0.12 * delta * coralSpeed;
