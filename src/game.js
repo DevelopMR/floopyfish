@@ -115,10 +115,16 @@ export class Game {
     });
     this.fishAppearanceSystem.initialize();
 
-    this.fishDisplayConfig = {
+    /* this.fishDisplayConfig = {
       displayWidth: 125,
       displayHeight: 113,
       radius: 12,
+    }; */
+
+    this.fishDisplayConfig = {
+      displayWidth: 170,
+      displayHeight: 154,
+      radius: 16,
     };
 
     this.baseEnvironmentConfig = {
