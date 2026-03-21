@@ -10,13 +10,12 @@ import { createTrialState } from "./simulation/TrialState.js";
 import { FitnessSystem } from "./simulation/FitnessSystem.js";
 import { GapRewardSystem } from "./simulation/GapRewardSystem.js";
 import { TrialSystem } from "./simulation/TrialSystem.js";
+import { EvolutionSystem } from "./simulation/EvolutionSystem.js";
 import { HudOverlay } from "./ui/HudOverlay.js";
 import { BrainOverlay } from "./ui/BrainOverlay.js";
 import { FishController } from "./ai/FishController.js";
 import { NeuralInputBuilder } from "./ai/NeuralInputBuilder.js";
 import { PlayerKeyboardController } from "./ai/PlayerKeyboardController.js";
-import { ScriptedController } from "./ai/ScriptedController.js";
-import { Brain } from "./ai/Brain.js";
 
 export class Game {
   async init() {
@@ -96,47 +95,10 @@ export class Game {
     this.causticsLayer.addChild(this.causticsA);
     this.causticsLayer.addChild(this.causticsB);
 
-    this.keyboard = new KeyboardController();
-
-
-    this.fish = new Fish(300, 360);
-    this.world.addChild(this.fish.sprite);
-
     this.spawnSystem = new SpawnSystem(this.world);
     this.currentSystem = new CurrentSystem(this.spawnSystem);
     this.collisionSystem = new ReefCollisionSystem(this.spawnSystem);
     this.sensorSystem = new SensorSystem(this.collisionSystem);
-
-    this.neuralInputBuilder = new NeuralInputBuilder({
-      worldWidth: 1280,
-      worldHeight: 720,
-    });
-
-    this.humanController = new PlayerKeyboardController(this.keyboard);
-
-
-    this.defaultFishBrain = new Brain({
-      architecture: [14, 12, 8, 2],
-      activations: ["tanh", "tanh", "tanh"],
-      seed: 1337,
-    });
-
-    this.fishController = new FishController({
-      inputBuilder: this.neuralInputBuilder,
-      brain: this.defaultFishBrain,
-    });
-
-    /* this.fishController = new FishController({
-      inputBuilder: this.neuralInputBuilder,
-    }); */
-
-    this.botController = new ScriptedController({
-      worldWidth: 1280,
-      worldHeight: 720,
-    });
-
-    this.controllerModeOrder = ["human", "fish", "bot"];
-    this.controllerMode = "human";
 
     this.difficultySystem = new DifficultySystem();
     this.fitnessSystem = new FitnessSystem(this.difficultySystem);
@@ -159,7 +121,45 @@ export class Game {
       worldHeight: 720,
     });
 
-    this.startNewTrial();
+    this.neuralInputBuilder = new NeuralInputBuilder({
+      worldWidth: 1280,
+      worldHeight: 720,
+    });
+
+    this.keyboard = new KeyboardController();
+    this.humanController = new PlayerKeyboardController(this.keyboard);
+
+    this.populationSize = 350;
+    this.brainArchitecture = [14, 12, 8, 2];
+    this.brainActivations = ["tanh", "tanh", "tanh"];
+
+    this.evolutionSystem = new EvolutionSystem({
+      populationSize: this.populationSize,
+      batchSize: this.populationSize,
+      architecture: this.brainArchitecture,
+      activations: this.brainActivations,
+      eliteSurvivalRate: 0.10,
+      breedingPoolRate: 0.25,
+      offspringRate: 0.50,
+      randomRate: 0.40,
+      mutationRate: 0.10,
+      mutationScale: 0.15,
+      biasMutationScale: 0.15,
+      seed: 1337,
+    });
+
+    this.actors = [];
+    this.featuredActor = null;
+    this.currentGenerationNumber = 0;
+
+    this.playerFish = null;
+    this.playerTrial = null;
+    this.playerLastRayResults = [];
+    this.playerLastCurrent = { x: 0, y: 0 };
+    this.playerLastEnvironment = this.baseEnvironmentConfig;
+
+    this.controllerModeOrder = ["human", "fish"];
+    this.controllerMode = "fish";
 
     this.debugLayer = new Container();
     this.app.stage.addChild(this.debugLayer);
@@ -176,7 +176,7 @@ export class Game {
     this.brainOverlay = new BrainOverlay({
       width: 1280,
       height: 720,
-      architecture: this.defaultFishBrain.architecture,
+      architecture: this.brainArchitecture,
       outputLabels: ["thrust X", "thrust Y"],
     });
     this.uiLayer.addChild(this.brainOverlay.root);
@@ -194,25 +194,97 @@ export class Game {
     this.lastRayResults = [];
     this.time = 0;
     this.causticsTime = 0;
-    this.loggedDeath = false;
+
+    this.startFirstGeneration();
+    this.startNewPlayerTrial();
+    this.updateModeVisibility();
   }
 
-  startNewTrial() {
-    const safeSpawn = this.spawnSystem.getSafeLoopSpawn(this.fish.radius);
-    this.fish.resetForLoop(safeSpawn.x, safeSpawn.y);
-    this.trial = createTrialState(this.fish.position.x, this.fish.position.y);
-    this.loggedDeath = false;
+  startFirstGeneration() {
+    const genomes = this.evolutionSystem.initializePopulation();
+    this.prepareGenomesForEvaluation(genomes);
+    this.spawnGenerationFromGenomes(genomes);
+    this.currentGenerationNumber = this.evolutionSystem.generationIndex;
   }
 
-  getActiveController() {
-    switch (this.controllerMode) {
-      case "human":
-        return this.humanController;
-      case "bot":
-        return this.botController;
-      case "fish":
-      default:
-        return this.fishController;
+  prepareGenomesForEvaluation(genomes) {
+    for (const genome of genomes) {
+      genome.fitness = Number.NaN;
+    }
+  }
+
+  clearActors() {
+    for (const actor of this.actors) {
+      if (actor?.fish?.sprite?.parent) {
+        actor.fish.sprite.parent.removeChild(actor.fish.sprite);
+      }
+    }
+
+    this.actors = [];
+    this.featuredActor = null;
+  }
+
+  spawnGenerationFromGenomes(genomes) {
+    this.clearActors();
+
+    this.actors = genomes.map((genome) => this.createActorForGenome(genome));
+    this.featuredActor = this.getFeaturedActor();
+    this.lastRayResults = this.featuredActor?.lastRayResults ?? [];
+    this.updateModeVisibility();
+  }
+
+  createActorForGenome(genome) {
+    const safeSpawn = this.spawnSystem.getSafeLoopSpawn(12);
+    const fish = new Fish(safeSpawn.x, safeSpawn.y);
+
+    this.world.addChild(fish.sprite);
+
+    const controller = new FishController({
+      inputBuilder: this.neuralInputBuilder,
+      brain: genome.brain,
+    });
+
+    const trial = createTrialState(fish.position.x, fish.position.y);
+
+    return {
+      genome,
+      fish,
+      controller,
+      trial,
+      lastRayResults: [],
+      lastCurrent: { x: 0, y: 0 },
+      lastEnvironment: this.baseEnvironmentConfig,
+      fitnessRecorded: false,
+    };
+  }
+
+  startNewPlayerTrial() {
+    if (!this.playerFish) {
+      const safeSpawn = this.spawnSystem.getSafeLoopSpawn(12);
+      this.playerFish = new Fish(safeSpawn.x, safeSpawn.y);
+      this.world.addChild(this.playerFish.sprite);
+    }
+
+    const safeSpawn = this.spawnSystem.getSafeLoopSpawn(this.playerFish.radius);
+    this.playerFish.resetForLoop(safeSpawn.x, safeSpawn.y);
+    this.playerTrial = createTrialState(this.playerFish.position.x, this.playerFish.position.y);
+    this.playerLastRayResults = [];
+    this.playerLastCurrent = { x: 0, y: 0 };
+    this.playerLastEnvironment = this.baseEnvironmentConfig;
+
+    this.updateModeVisibility();
+  }
+
+  updateModeVisibility() {
+    const showPopulation = this.controllerMode === "fish";
+    const showPlayer = this.controllerMode === "human";
+
+    for (const actor of this.actors) {
+      actor.fish.sprite.visible = showPopulation;
+    }
+
+    if (this.playerFish) {
+      this.playerFish.sprite.visible = showPlayer;
     }
   }
 
@@ -221,6 +293,7 @@ export class Game {
     const nextIndex = (currentIndex + 1) % this.controllerModeOrder.length;
     this.controllerMode = this.controllerModeOrder[nextIndex];
     this.hudOverlay.setMode(this.controllerMode);
+    this.updateModeVisibility();
   }
 
   start() {
@@ -248,8 +321,8 @@ export class Game {
   }
 
   updateEnvironmentVisuals(environment, delta) {
-    const coralSpeed = environment.coralMotionSpeed;
-    const waveAmp = environment.waveAmplitude;
+    const coralSpeed = environment?.coralMotionSpeed ?? 1;
+    const waveAmp = environment?.waveAmplitude ?? 1;
 
     this.bgFar.tilePosition.x -= 0.3 * delta * (0.9 + 0.1 * waveAmp);
     this.bgMid.tilePosition.x -= 0.8 * delta * (0.9 + 0.1 * waveAmp);
@@ -266,66 +339,197 @@ export class Game {
     this.causticsB.alpha = 0.07 + Math.sin(this.causticsTime * 1.3 + 1.7) * 0.018 * waveAmp;
   }
 
-  update(delta) {
-    this.time += delta * 0.01;
+  getFeaturedActor() {
+    if (!this.actors.length) {
+      return null;
+    }
 
-    const environment = this.trialSystem.getEnvironment(
-      this.baseEnvironmentConfig,
-      this.trial
-    );
+    let bestActor = this.actors[0];
+    let bestFitness = Number.isFinite(bestActor.trial?.fitness) ? bestActor.trial.fitness : -Infinity;
+
+    for (const actor of this.actors) {
+      const fitness = Number.isFinite(actor.trial?.fitness) ? actor.trial.fitness : -Infinity;
+      if (fitness > bestFitness) {
+        bestFitness = fitness;
+        bestActor = actor;
+      }
+    }
+
+    return bestActor;
+  }
+
+  updateActor(actor, delta) {
+    const environment = this.trialSystem.getEnvironment(this.baseEnvironmentConfig, actor.trial);
+    actor.lastEnvironment = environment;
 
     this.currentSystem.setEnvironment(environment);
-    this.spawnSystem.update(delta);
 
     const current = this.currentSystem.getForce(
-      this.fish.position.x,
-      this.fish.position.y,
+      actor.fish.position.x,
+      actor.fish.position.y,
       this.time
     );
 
-    this.lastRayResults = this.sensorSystem.getVisionReadings(this.fish);
+    actor.lastCurrent = current;
+    actor.lastRayResults = this.sensorSystem.getVisionReadings(actor.fish);
 
-    const activeController = this.getActiveController();
+    if (actor.trial.alive) {
+      actor.controller.update({
+        fish: actor.fish,
+        rayResults: actor.lastRayResults,
+        current,
+        trial: actor.trial,
+      });
 
-    if (this.trial.alive) {
-      if (activeController?.update) {
-        activeController.update({
-          fish: this.fish,
-          rayResults: this.lastRayResults,
-          current,
-          trial: this.trial,
-        });
-      }
-
-      this.fish.update(delta, activeController, current);
-    } else if (this.trial.isDying) {
-      this.fish.updateDeadFloat(delta, current);
+      actor.fish.update(delta, actor.controller, current);
+    } else if (actor.trial.isDying) {
+      actor.fish.updateDeadFloat(delta, current);
     }
 
-    this.trialSystem.update(this.fish, this.trial);
-    this.drawRayDebug(this.lastRayResults);
+    this.trialSystem.update(actor.fish, actor.trial);
 
+    if (actor.trial.deathResolved && !actor.fitnessRecorded) {
+      actor.fitnessRecorded = true;
+      this.evolutionSystem.recordFitness(actor.genome.id, actor.trial.fitness);
+    }
+  }
+
+  updateHumanMode(delta) {
+    if (!this.playerFish || !this.playerTrial) {
+      return;
+    }
+
+    const environment = this.trialSystem.getEnvironment(this.baseEnvironmentConfig, this.playerTrial);
+    this.playerLastEnvironment = environment;
+
+    this.currentSystem.setEnvironment(environment);
+
+    const current = this.currentSystem.getForce(
+      this.playerFish.position.x,
+      this.playerFish.position.y,
+      this.time
+    );
+
+    this.playerLastCurrent = current;
+    this.playerLastRayResults = this.sensorSystem.getVisionReadings(this.playerFish);
+
+    const playerInputs = this.neuralInputBuilder.build({
+      fish: this.playerFish,
+      rayResults: this.playerLastRayResults,
+      current,
+    });
+
+    this.humanController.lastInputs = playerInputs;
+
+    if (this.playerTrial.alive) {
+      this.humanController.update({
+        fish: this.playerFish,
+        rayResults: this.playerLastRayResults,
+        current,
+        trial: this.playerTrial,
+      });
+
+      this.playerFish.update(delta, this.humanController, current);
+    } else if (this.playerTrial.isDying) {
+      this.playerFish.updateDeadFloat(delta, current);
+    }
+
+    this.trialSystem.update(this.playerFish, this.playerTrial);
+
+    this.lastRayResults = this.playerLastRayResults;
+    this.drawRayDebug(this.lastRayResults);
     this.updateEnvironmentVisuals(environment, delta);
 
-    if (this.trial.deathResolved && !this.loggedDeath) {
-      this.loggedDeath = true;
-      console.log("trial ended", {
-        fitness: this.trial.fitness,
-        loopsCompleted: this.trial.loopsCompleted,
-        totalGapPasses: this.trial.totalGapPasses,
-      });
-      this.startNewTrial();
-    }
-
     this.hudOverlay.update({
-      score: this.trial.fitness,
-      loopCount: this.trial.loopsCompleted,
-      mode: this.controllerMode,
+      score: this.playerTrial.fitness,
+      loopCount: this.playerTrial.loopsCompleted,
+      mode: "human",
     });
 
     this.brainOverlay.update({
-      inputs: activeController?.lastInputs ?? new Array(14).fill(0),
-      outputs: activeController?.lastOutputs ?? [0, 0],
+      architecture: this.brainArchitecture,
+      inputs: this.humanController.lastInputs ?? new Array(14).fill(0),
+      outputs: this.humanController.lastOutputs ?? [0, 0],
     });
+
+    if (this.playerTrial.deathResolved) {
+      this.startNewPlayerTrial();
+    }
+  }
+
+  isCurrentGenerationFinished() {
+    return this.actors.length > 0 && this.actors.every((actor) => actor.fitnessRecorded);
+  }
+
+  startNextGeneration() {
+    const previousSummary = {
+      generation: this.evolutionSystem.generationIndex,
+      bestActor: this.getFeaturedActor(),
+    };
+
+    this.evolutionSystem.evolveNextGeneration();
+
+    const nextGenomes = this.evolutionSystem.getGenerationGenomes();
+    this.prepareGenomesForEvaluation(nextGenomes);
+    this.spawnGenerationFromGenomes(nextGenomes);
+    this.currentGenerationNumber = this.evolutionSystem.generationIndex;
+
+    const summary = this.evolutionSystem.getLastGenerationSummary();
+    console.log("generation evolved", {
+      previousGeneration: previousSummary.generation,
+      bestFitness: summary?.bestFitness ?? previousSummary.bestActor?.trial?.fitness ?? 0,
+      medianFitness: summary?.medianFitness ?? 0,
+      populationSize: summary?.populationSize ?? this.populationSize,
+      eliteCount: summary?.eliteCount ?? 0,
+      offspringCount: summary?.offspringCount ?? 0,
+      randomCount: summary?.randomCount ?? 0,
+      nextGeneration: this.currentGenerationNumber,
+    });
+  }
+
+  updateFishMode(delta) {
+    this.spawnSystem.update(delta);
+
+    for (const actor of this.actors) {
+      this.updateActor(actor, delta);
+    }
+
+    this.featuredActor = this.getFeaturedActor();
+
+    if (this.featuredActor) {
+      this.lastRayResults = this.featuredActor.lastRayResults;
+      this.drawRayDebug(this.lastRayResults);
+      this.updateEnvironmentVisuals(this.featuredActor.lastEnvironment, delta);
+
+      this.hudOverlay.update({
+        score: this.featuredActor.trial.fitness,
+        loopCount: this.featuredActor.trial.loopsCompleted,
+        mode: "fish",
+      });
+
+      this.brainOverlay.update({
+        architecture: this.featuredActor.genome.brain.architecture,
+        inputs: this.featuredActor.controller.lastInputs ?? new Array(14).fill(0),
+        outputs: this.featuredActor.controller.lastOutputs ?? [0, 0],
+      });
+    } else {
+      this.drawRayDebug([]);
+      this.updateEnvironmentVisuals(this.baseEnvironmentConfig, delta);
+    }
+
+    if (this.isCurrentGenerationFinished()) {
+      this.startNextGeneration();
+    }
+  }
+
+  update(delta) {
+    this.time += delta * 0.01;
+
+    if (this.controllerMode === "human") {
+      this.updateHumanMode(delta);
+      return;
+    }
+
+    this.updateFishMode(delta);
   }
 }
