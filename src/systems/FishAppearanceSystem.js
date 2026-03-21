@@ -55,7 +55,7 @@ export class FishAppearanceSystem {
     }
 
     applyBaseAppearance(fish, appearance = {}) {
-        fish.sprite.texture = this.getBaseTexture();
+        fish.setTexture(this.getBaseTexture());
         fish.sprite.alpha = 1;
         fish.sprite.tint = appearance.tint ?? 0xffffff;
         fish.sprite.filters = appearance.filters ?? [];
@@ -65,7 +65,7 @@ export class FishAppearanceSystem {
         const ghostFilter = new ColorMatrixFilter();
         ghostFilter.brightness(1.05, false);
 
-        fish.sprite.texture = this.getGhostTexture();
+        fish.setTexture(this.getGhostTexture());
         fish.sprite.alpha = 0.55;
         fish.sprite.tint = 0xddeeff;
         fish.sprite.filters = [ghostFilter];

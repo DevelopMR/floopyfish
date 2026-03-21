@@ -1,7 +1,7 @@
 import { Sprite, Texture } from "pixi.js";
 
 export class Fish {
-  constructor(x, y, texture = null) {
+  constructor(x, y, texture = null, options = {}) {
     this.sprite = new Sprite(texture ?? Texture.from("assets/lionfish75.png"));
     this.sprite.anchor.set(0.5);
 
@@ -14,7 +14,33 @@ export class Fish {
     this.facingRotation = 0;
     this.sprite.rotation = 0;
 
-    this.radius = 12;
+    this.displayWidth = options.displayWidth ?? 62;
+    this.displayHeight = options.displayHeight ?? null;
+
+    if (this.displayHeight != null) {
+      this.sprite.width = this.displayWidth;
+      this.sprite.height = this.displayHeight;
+    } else {
+      const aspect = this.sprite.texture.height > 0
+        ? this.sprite.texture.width / this.sprite.texture.height
+        : 1;
+
+      this.sprite.width = this.displayWidth;
+      this.sprite.height = this.displayWidth / aspect;
+    }
+
+    this.radius = options.radius ?? 12;
+  }
+
+  setTexture(texture) {
+    this.sprite.texture = texture;
+
+    const aspect = this.sprite.texture.height > 0
+      ? this.sprite.texture.width / this.sprite.texture.height
+      : 1;
+
+    this.sprite.width = this.displayWidth;
+    this.sprite.height = this.displayWidth / aspect;
   }
 
   getControlIntent(controller) {

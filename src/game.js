@@ -287,10 +287,14 @@ export class Game {
       const safeSpawn = this.spawnSystem.getSafeLoopSpawn(12);
       /* this.playerFish = new Fish(safeSpawn.x, safeSpawn.y); */
 
-      this.playerFish = new Fish(
+      const fish = new Fish(
         safeSpawn.x,
         safeSpawn.y,
-        this.fishAppearanceSystem.getBaseTexture()
+        this.fishAppearanceSystem.getBaseTexture(),
+        {
+          displayWidth: 62,
+          radius: 12,
+        }
       );
 
       this.fishAppearanceSystem.applyBaseAppearance(this.playerFish);
