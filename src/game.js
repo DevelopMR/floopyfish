@@ -255,6 +255,7 @@ export class Game {
       lastCurrent: { x: 0, y: 0 },
       lastEnvironment: this.baseEnvironmentConfig,
       fitnessRecorded: false,
+      isActive: true,
     };
   }
 
@@ -280,7 +281,7 @@ export class Game {
     const showPlayer = this.controllerMode === "human";
 
     for (const actor of this.actors) {
-      actor.fish.sprite.visible = showPopulation;
+      actor.fish.sprite.visible = showPopulation && actor.isActive;
     }
 
     if (this.playerFish) {
@@ -339,9 +340,38 @@ export class Game {
     this.causticsB.alpha = 0.07 + Math.sin(this.causticsTime * 1.3 + 1.7) * 0.018 * waveAmp;
   }
 
+  getAliveActorCount() {
+    let alive = 0;
+
+    for (const actor of this.actors) {
+      if (actor.isActive) {
+        alive += 1;
+      }
+    }
+
+    return alive;
+  }
+
   getFeaturedActor() {
     if (!this.actors.length) {
       return null;
+    }
+
+    const aliveActors = this.actors.filter((actor) => actor.isActive);
+
+    if (aliveActors.length > 0) {
+      let bestAlive = aliveActors[0];
+      let bestAliveFitness = Number.isFinite(bestAlive.trial?.fitness) ? bestAlive.trial.fitness : -Infinity;
+
+      for (const actor of aliveActors) {
+        const fitness = Number.isFinite(actor.trial?.fitness) ? actor.trial.fitness : -Infinity;
+        if (fitness > bestAliveFitness) {
+          bestAliveFitness = fitness;
+          bestAlive = actor;
+        }
+      }
+
+      return bestAlive;
     }
 
     let bestActor = this.actors[0];
@@ -359,6 +389,10 @@ export class Game {
   }
 
   updateActor(actor, delta) {
+    if (!actor.isActive) {
+      return;
+    }
+
     const environment = this.trialSystem.getEnvironment(this.baseEnvironmentConfig, actor.trial);
     actor.lastEnvironment = environment;
 
@@ -390,6 +424,8 @@ export class Game {
 
     if (actor.trial.deathResolved && !actor.fitnessRecorded) {
       actor.fitnessRecorded = true;
+      actor.isActive = false;
+      actor.fish.sprite.visible = false;
       this.evolutionSystem.recordFitness(actor.genome.id, actor.trial.fitness);
     }
   }
@@ -450,6 +486,13 @@ export class Game {
       architecture: this.brainArchitecture,
       inputs: this.humanController.lastInputs ?? new Array(14).fill(0),
       outputs: this.humanController.lastOutputs ?? [0, 0],
+      metrics: {
+        generation: this.currentGenerationNumber,
+        alive: this.getAliveActorCount(),
+        population: this.populationSize,
+        fitness: this.playerTrial.fitness,
+        loops: this.playerTrial.loopsCompleted,
+      },
     });
 
     if (this.playerTrial.deathResolved) {
@@ -511,6 +554,13 @@ export class Game {
         architecture: this.featuredActor.genome.brain.architecture,
         inputs: this.featuredActor.controller.lastInputs ?? new Array(14).fill(0),
         outputs: this.featuredActor.controller.lastOutputs ?? [0, 0],
+        metrics: {
+          generation: this.currentGenerationNumber,
+          alive: this.getAliveActorCount(),
+          population: this.populationSize,
+          fitness: this.featuredActor.trial.fitness,
+          loops: this.featuredActor.trial.loopsCompleted,
+        },
       });
     } else {
       this.drawRayDebug([]);
