@@ -115,6 +115,11 @@ export class Game {
     });
     this.fishAppearanceSystem.initialize();
 
+    this.fishDisplayConfig = {
+      displayWidth: 125,
+      displayHeight: 113,
+      radius: 12,
+    };
 
     this.baseEnvironmentConfig = {
       gapCurrentForce: this.currentSystem.baseGapPressureStrength,
@@ -246,12 +251,13 @@ export class Game {
   }
 
   createActorForGenome(genome) {
-    const safeSpawn = this.spawnSystem.getSafeLoopSpawn(12);
-    /* const fish = new Fish(safeSpawn.x, safeSpawn.y); */
+    const safeSpawn = this.spawnSystem.getSafeLoopSpawn(this.fishDisplayConfig.radius);
+
     const fish = new Fish(
       safeSpawn.x,
       safeSpawn.y,
-      this.fishAppearanceSystem.getBaseTexture()
+      this.fishAppearanceSystem.getBaseTexture(),
+      this.fishDisplayConfig
     );
 
     this.fishAppearanceSystem.applyLineageAppearance(fish, {
@@ -284,30 +290,24 @@ export class Game {
 
   startNewPlayerTrial() {
     if (!this.playerFish) {
-      const safeSpawn = this.spawnSystem.getSafeLoopSpawn(12);
-      /* this.playerFish = new Fish(safeSpawn.x, safeSpawn.y); */
+      const safeSpawn = this.spawnSystem.getSafeLoopSpawn(this.fishDisplayConfig.radius);
 
       this.playerFish = new Fish(
         safeSpawn.x,
         safeSpawn.y,
         this.fishAppearanceSystem.getBaseTexture(),
-        {
-          displayWidth: 62,
-          radius: 12,
-        }
+        this.fishDisplayConfig
       );
 
       this.fishAppearanceSystem.applyBaseAppearance(this.playerFish);
-      this.world.addChild(this.playerFish.sprite);
-
-      this.fishAppearanceSystem.applyBaseAppearance(this.playerFish);
-
-
       this.world.addChild(this.playerFish.sprite);
     }
 
     const safeSpawn = this.spawnSystem.getSafeLoopSpawn(this.playerFish.radius);
     this.playerFish.resetForLoop(safeSpawn.x, safeSpawn.y);
+
+    this.fishAppearanceSystem.applyBaseAppearance(this.playerFish);
+
     this.playerTrial = createTrialState(this.playerFish.position.x, this.playerFish.position.y);
     this.playerLastRayResults = [];
     this.playerLastCurrent = { x: 0, y: 0 };

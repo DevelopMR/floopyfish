@@ -14,26 +14,19 @@ export class Fish {
     this.facingRotation = 0;
     this.sprite.rotation = 0;
 
-    this.displayWidth = options.displayWidth ?? 62;
-    this.displayHeight = options.displayHeight ?? null;
+    this.displayWidth = options.displayWidth ?? 125;
+    this.displayHeight = options.displayHeight ?? 113;
+    this.radius = options.radius ?? 12;
 
+    this.applyDisplaySize();
+  }
+
+  applyDisplaySize() {
     if (this.displayHeight != null) {
       this.sprite.width = this.displayWidth;
       this.sprite.height = this.displayHeight;
-    } else {
-      const aspect = this.sprite.texture.height > 0
-        ? this.sprite.texture.width / this.sprite.texture.height
-        : 1;
-
-      this.sprite.width = this.displayWidth;
-      this.sprite.height = this.displayWidth / aspect;
+      return;
     }
-
-    this.radius = options.radius ?? 12;
-  }
-
-  setTexture(texture) {
-    this.sprite.texture = texture;
 
     const aspect = this.sprite.texture.height > 0
       ? this.sprite.texture.width / this.sprite.texture.height
@@ -41,6 +34,11 @@ export class Fish {
 
     this.sprite.width = this.displayWidth;
     this.sprite.height = this.displayWidth / aspect;
+  }
+
+  setTexture(texture) {
+    this.sprite.texture = texture;
+    this.applyDisplaySize();
   }
 
   getControlIntent(controller) {
