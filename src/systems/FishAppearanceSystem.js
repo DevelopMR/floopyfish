@@ -16,7 +16,7 @@ export class FishAppearanceSystem {
 
     initialize() {
         const sheetTexture = Texture.from(this.sheetPath);
-        const baseTexture = sheetTexture.baseTexture;
+        const textureSource = sheetTexture.source;
 
         const frameWidth = Math.floor(sheetTexture.width / this.layout.columns);
         const frameHeight = Math.floor(sheetTexture.height / this.layout.rows);
@@ -34,7 +34,7 @@ export class FishAppearanceSystem {
 
                 this.textures.push(
                     new Texture({
-                        source: baseTexture,
+                        source: textureSource,
                         frame,
                     })
                 );
@@ -78,7 +78,7 @@ export class FishAppearanceSystem {
             isChampion = false,
         } = lineageState;
 
-        fish.sprite.texture = this.getBaseTexture();
+        fish.setTexture(this.getBaseTexture());
         fish.sprite.alpha = 1;
         fish.sprite.filters = [];
 
