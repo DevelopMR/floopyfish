@@ -124,7 +124,9 @@ export class Game {
     this.fishDisplayConfig = {
       displayWidth: 170,
       displayHeight: 154,
-      radius: 16,
+      radius: 15,
+      sensorOffsetX: 64,
+      sensorOffsetY: 56,
     };
 
     this.baseEnvironmentConfig = {

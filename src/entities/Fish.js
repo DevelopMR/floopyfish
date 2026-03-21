@@ -1,4 +1,4 @@
-import { Sprite, Texture } from "pixi.js";
+import { Point, Sprite, Texture } from "pixi.js";
 
 export class Fish {
   constructor(x, y, texture = null, options = {}) {
@@ -17,6 +17,11 @@ export class Fish {
     this.displayWidth = options.displayWidth ?? 125;
     this.displayHeight = options.displayHeight ?? 113;
     this.radius = options.radius ?? 12;
+
+    this.sensorOffset = {
+      x: options.sensorOffsetX ?? 0,
+      y: options.sensorOffsetY ?? 0,
+    };
 
     this.applyDisplaySize();
   }
@@ -39,6 +44,16 @@ export class Fish {
   setTexture(texture) {
     this.sprite.texture = texture;
     this.applyDisplaySize();
+  }
+
+  setSensorOffset(x, y) {
+    this.sensorOffset.x = x;
+    this.sensorOffset.y = y;
+  }
+
+  getSensorWorldPosition() {
+    const localPoint = new Point(this.sensorOffset.x, this.sensorOffset.y);
+    return this.sprite.toGlobal(localPoint);
   }
 
   getControlIntent(controller) {

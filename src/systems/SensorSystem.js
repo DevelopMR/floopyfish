@@ -60,8 +60,12 @@ export class SensorSystem {
     }
 
     getVisionReadings(fish) {
-        const startX = fish.position.x;
-        const startY = fish.position.y;
+        const sensorPosition = fish.getSensorWorldPosition
+            ? fish.getSensorWorldPosition()
+            : { x: fish.position.x, y: fish.position.y };
+
+        const startX = sensorPosition.x;
+        const startY = sensorPosition.y;
         const facing = fish.facingRotation ?? fish.sprite.rotation ?? 0;
 
         return this.localRayOffsets.map((offset) => {
