@@ -16,6 +16,7 @@ import { FishController } from "./ai/FishController.js";
 import { NeuralInputBuilder } from "./ai/NeuralInputBuilder.js";
 import { PlayerKeyboardController } from "./ai/PlayerKeyboardController.js";
 import { ScriptedController } from "./ai/ScriptedController.js";
+import { Brain } from "./ai/Brain.js";
 
 export class Game {
   async init() {
@@ -97,6 +98,7 @@ export class Game {
 
     this.keyboard = new KeyboardController();
 
+
     this.fish = new Fish(300, 360);
     this.world.addChild(this.fish.sprite);
 
@@ -112,9 +114,21 @@ export class Game {
 
     this.humanController = new PlayerKeyboardController(this.keyboard);
 
+
+    this.defaultFishBrain = new Brain({
+      architecture: [14, 12, 8, 2],
+      activations: ["tanh", "tanh", "tanh"],
+      seed: 1337,
+    });
+
     this.fishController = new FishController({
       inputBuilder: this.neuralInputBuilder,
+      brain: this.defaultFishBrain,
     });
+
+    /* this.fishController = new FishController({
+      inputBuilder: this.neuralInputBuilder,
+    }); */
 
     this.botController = new ScriptedController({
       worldWidth: 1280,
@@ -162,7 +176,7 @@ export class Game {
     this.brainOverlay = new BrainOverlay({
       width: 1280,
       height: 720,
-      architecture: [14, 12, 8, 2],
+      architecture: this.defaultFishBrain.architecture,
       outputLabels: ["thrust X", "thrust Y"],
     });
     this.uiLayer.addChild(this.brainOverlay.root);
