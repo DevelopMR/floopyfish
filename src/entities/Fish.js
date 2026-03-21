@@ -1,8 +1,8 @@
 import { Sprite, Texture } from "pixi.js";
 
 export class Fish {
-  constructor(x, y) {
-    this.sprite = new Sprite(Texture.from("assets/lionfish75.png"));
+  constructor(x, y, texture = null) {
+    this.sprite = new Sprite(texture ?? Texture.from("assets/lionfish75.png"));
     this.sprite.anchor.set(0.5);
 
     this.position = { x, y };
@@ -59,7 +59,6 @@ export class Fish {
     this.velocity.x += (current?.x ?? 0) * 0.35;
     this.velocity.y += (current?.y ?? 0) * 0.35;
 
-    // gentle buoyancy upward
     this.velocity.y -= 0.02 * delta;
 
     this.position.x += this.velocity.x;

@@ -16,6 +16,7 @@ import { BrainOverlay } from "./ui/BrainOverlay.js";
 import { FishController } from "./ai/FishController.js";
 import { NeuralInputBuilder } from "./ai/NeuralInputBuilder.js";
 import { PlayerKeyboardController } from "./ai/PlayerKeyboardController.js";
+import { FishAppearanceSystem } from "./systems/FishAppearanceSystem.js";
 
 export class Game {
   async init() {
@@ -37,6 +38,7 @@ export class Game {
       "assets/caustics_tile.png",
       "assets/FloopyFish_logo.png",
       "assets/Player_Mode_icons.png",
+      "assets/Fish-Icon_set.png",
     ]);
 
     this.backgroundLayer = new Container();
@@ -103,6 +105,16 @@ export class Game {
     this.difficultySystem = new DifficultySystem();
     this.fitnessSystem = new FitnessSystem(this.difficultySystem);
     this.gapRewardSystem = new GapRewardSystem(this.fitnessSystem);
+
+
+    this.fishAppearanceSystem = new FishAppearanceSystem({
+      sheetPath: "assets/Fish-Icon_set.png",
+      layout: { columns: 3, rows: 3 },
+      baseIndex: 0,
+      ghostIndex: 8,
+    });
+    this.fishAppearanceSystem.initialize();
+
 
     this.baseEnvironmentConfig = {
       gapCurrentForce: this.currentSystem.baseGapPressureStrength,
@@ -235,7 +247,18 @@ export class Game {
 
   createActorForGenome(genome) {
     const safeSpawn = this.spawnSystem.getSafeLoopSpawn(12);
-    const fish = new Fish(safeSpawn.x, safeSpawn.y);
+    /* const fish = new Fish(safeSpawn.x, safeSpawn.y); */
+    const fish = new Fish(
+      safeSpawn.x,
+      safeSpawn.y,
+      this.fishAppearanceSystem.getBaseTexture()
+    );
+
+    this.fishAppearanceSystem.applyLineageAppearance(fish, {
+      wrapsUnlocked: 0,
+      isElite: false,
+      isChampion: false,
+    });
 
     this.world.addChild(fish.sprite);
 
@@ -262,7 +285,17 @@ export class Game {
   startNewPlayerTrial() {
     if (!this.playerFish) {
       const safeSpawn = this.spawnSystem.getSafeLoopSpawn(12);
-      this.playerFish = new Fish(safeSpawn.x, safeSpawn.y);
+      /* this.playerFish = new Fish(safeSpawn.x, safeSpawn.y); */
+
+      this.playerFish = new Fish(
+        safeSpawn.x,
+        safeSpawn.y,
+        this.fishAppearanceSystem.getBaseTexture()
+      );
+
+      this.fishAppearanceSystem.applyBaseAppearance(this.playerFish);
+
+
       this.world.addChild(this.playerFish.sprite);
     }
 
