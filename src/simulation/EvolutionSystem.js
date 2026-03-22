@@ -14,21 +14,24 @@ export class EvolutionSystem {
         mutationScale = 0.15,
         biasMutationScale = mutationScale,
         seed = 1,
+        heroEventName = "firstLooper",
+        heroColorFamily = "hero",
     } = {}) {
         this.populationSize = populationSize;
         this.batchSize = batchSize;
         this.architecture = architecture;
         this.activations = activations;
-
         this.eliteSurvivalRate = eliteSurvivalRate;
         this.breedingPoolRate = breedingPoolRate;
         this.offspringRate = offspringRate;
         this.randomRate = randomRate;
-
         this.mutationRate = mutationRate;
         this.mutationScale = mutationScale;
         this.biasMutationScale = biasMutationScale;
         this.seed = seed;
+
+        this.heroEventName = heroEventName;
+        this.heroColorFamily = heroColorFamily;
 
         this.validateConfiguration();
 
@@ -37,6 +40,9 @@ export class EvolutionSystem {
         this.genomes = [];
         this.activeBatchStart = 0;
         this.lastGenerationSummary = null;
+
+        this.currentGenerationHeroGenomeId = null;
+        this.currentGenerationHeroRecord = null;
     }
 
     initializePopulation() {
@@ -49,6 +55,7 @@ export class EvolutionSystem {
         this.generationIndex = 0;
         this.activeBatchStart = 0;
         this.lastGenerationSummary = null;
+        this.clearGenerationHero();
 
         return this.genomes;
     }
@@ -90,7 +97,8 @@ export class EvolutionSystem {
     }
 
     recordFitness(genomeId, fitness) {
-        const genome = this.genomes.find((entry) => entry.id === genomeId);
+        const genome = this.findGenomeById(genomeId);
+
         if (!genome) {
             throw new Error(`EvolutionSystem could not find genome: ${genomeId}`);
         }
@@ -117,6 +125,80 @@ export class EvolutionSystem {
         return this.genomes.slice().sort((a, b) => b.fitness - a.fitness);
     }
 
+    findGenomeById(genomeId) {
+        return this.genomes.find((entry) => entry.id === genomeId) ?? null;
+    }
+
+    hasGenerationHero() {
+        return Boolean(this.getGenerationHeroGenome());
+    }
+
+    getGenerationHeroGenome() {
+        if (this.currentGenerationHeroGenomeId) {
+            const trackedHero = this.findGenomeById(this.currentGenerationHeroGenomeId);
+            if (trackedHero) {
+                return trackedHero;
+            }
+        }
+
+        const inferredHero = this.genomes.find(
+            (genome) => genome.appearance?.heroEvent === this.heroEventName
+        );
+
+        return inferredHero ?? null;
+    }
+
+    getGenerationHeroRecord() {
+        return this.currentGenerationHeroRecord
+            ? {
+                ...this.currentGenerationHeroRecord,
+            }
+            : null;
+    }
+
+    clearGenerationHero() {
+        this.currentGenerationHeroGenomeId = null;
+        this.currentGenerationHeroRecord = null;
+    }
+
+    markFirstLooperHero(
+        genomeId,
+        {
+            heroEvent = this.heroEventName,
+            colorFamily = this.heroColorFamily,
+            baseIconIndex = null,
+            resetLineageAge = true,
+        } = {}
+    ) {
+        if (this.currentGenerationHeroGenomeId) {
+            return this.getGenerationHeroGenome();
+        }
+
+        const genome = this.findGenomeById(genomeId);
+
+        if (!genome) {
+            throw new Error(`EvolutionSystem could not find genome for hero mark: ${genomeId}`);
+        }
+
+        genome.markHero({
+            heroEvent,
+            colorFamily,
+            baseIconIndex: baseIconIndex ?? genome.appearance?.baseIconIndex ?? 0,
+            resetLineageAge,
+        });
+
+        this.currentGenerationHeroGenomeId = genome.id;
+        this.currentGenerationHeroRecord = {
+            generation: this.generationIndex,
+            genomeId: genome.id,
+            heroEvent,
+            colorFamily,
+            fitnessAtMark: Number.isFinite(genome.fitness) ? genome.fitness : 0,
+        };
+
+        return genome;
+    }
+
     evolveNextGeneration() {
         if (!this.isGenerationComplete()) {
             throw new Error("Cannot evolve next generation before all genomes have finite fitness.");
@@ -124,46 +206,71 @@ export class EvolutionSystem {
 
         const sorted = this.getSortedGenomes();
         const counts = this.calculateGenerationCounts();
-        const elites = sorted.slice(0, counts.elites);
-        const breedingPool = sorted.slice(0, counts.breedingPool);
+        const heroSource = this.getGenerationHeroGenome();
 
+        const elites = sorted.slice(0, counts.elites);
+        const breedingPool = this.buildBreedingPool(sorted, counts, heroSource);
         const nextGeneration = [];
+        const reservedSourceIds = new Set();
+
+        if (heroSource) {
+            nextGeneration.push(this.cloneHeroCarryForward(heroSource));
+            reservedSourceIds.add(heroSource.id);
+        }
 
         for (const elite of elites) {
-            nextGeneration.push(elite.clone({
-                generation: this.generationIndex + 1,
-                fitness: 0,
-                parentIds: [elite.id],
-                seed: this.nextSeed(),
-            }));
+            if (reservedSourceIds.has(elite.id)) {
+                continue;
+            }
+
+            nextGeneration.push(
+                elite.clone({
+                    generation: this.generationIndex + 1,
+                    fitness: 0,
+                    parentIds: [elite.id],
+                    seed: this.nextSeed(),
+                })
+            );
+
+            reservedSourceIds.add(elite.id);
+
+            if (nextGeneration.length >= this.populationSize) {
+                break;
+            }
         }
 
-        for (let i = 0; i < counts.offspring; i++) {
+        for (let i = 0; i < counts.offspring && nextGeneration.length < this.populationSize; i++) {
             const parent = this.selectWeightedParent(breedingPool);
-            nextGeneration.push(parent.createOffspring({
-                generation: this.generationIndex + 1,
-                fitness: 0,
-                seed: this.nextSeed(),
-                mutationRate: this.mutationRate,
-                mutationScale: this.mutationScale,
-                biasMutationScale: this.biasMutationScale,
-            }));
+
+            nextGeneration.push(
+                parent.createOffspring({
+                    generation: this.generationIndex + 1,
+                    fitness: 0,
+                    seed: this.nextSeed(),
+                    mutationRate: this.mutationRate,
+                    mutationScale: this.mutationScale,
+                    biasMutationScale: this.biasMutationScale,
+                })
+            );
         }
 
-        for (let i = 0; i < counts.random; i++) {
+        for (let i = 0; i < counts.random && nextGeneration.length < this.populationSize; i++) {
             nextGeneration.push(this.createRandomGenome({ generation: this.generationIndex + 1 }));
         }
 
         while (nextGeneration.length < this.populationSize) {
             const parent = this.selectWeightedParent(breedingPool);
-            nextGeneration.push(parent.createOffspring({
-                generation: this.generationIndex + 1,
-                fitness: 0,
-                seed: this.nextSeed(),
-                mutationRate: this.mutationRate,
-                mutationScale: this.mutationScale,
-                biasMutationScale: this.biasMutationScale,
-            }));
+
+            nextGeneration.push(
+                parent.createOffspring({
+                    generation: this.generationIndex + 1,
+                    fitness: 0,
+                    seed: this.nextSeed(),
+                    mutationRate: this.mutationRate,
+                    mutationScale: this.mutationScale,
+                    biasMutationScale: this.biasMutationScale,
+                })
+            );
         }
 
         if (nextGeneration.length > this.populationSize) {
@@ -176,15 +283,18 @@ export class EvolutionSystem {
             bestFitness: sorted[0]?.fitness ?? 0,
             medianFitness: this.getMedianFitness(sorted),
             eliteCount: counts.elites,
-            breedingPoolCount: counts.breedingPool,
+            breedingPoolCount: breedingPool.length,
             offspringCount: counts.offspring,
             randomCount: counts.random,
             bestGenomeId: sorted[0]?.id ?? null,
+            heroGenomeId: heroSource?.id ?? null,
+            heroCarriedForward: Boolean(heroSource),
         };
 
         this.genomes = nextGeneration;
         this.generationIndex += 1;
         this.activeBatchStart = 0;
+        this.clearGenerationHero();
 
         return this.genomes;
     }
@@ -205,6 +315,38 @@ export class EvolutionSystem {
             offspring,
             random,
         };
+    }
+
+    buildBreedingPool(sorted, counts, heroSource = null) {
+        const pool = sorted.slice(0, counts.breedingPool);
+
+        if (!heroSource) {
+            return pool;
+        }
+
+        const alreadyIncluded = pool.some((genome) => genome.id === heroSource.id);
+        if (!alreadyIncluded) {
+            pool.push(heroSource);
+        }
+
+        return pool;
+    }
+
+    cloneHeroCarryForward(heroSource) {
+        const inheritedAppearance = {
+            ...heroSource.createInheritedAppearance({ incrementLineageAge: true }),
+            heroEvent: null,
+            isHeroLine: true,
+            colorFamily: heroSource.appearance?.colorFamily || this.heroColorFamily,
+        };
+
+        return heroSource.clone({
+            generation: this.generationIndex + 1,
+            fitness: 0,
+            parentIds: [heroSource.id],
+            seed: this.nextSeed(),
+            appearance: inheritedAppearance,
+        });
     }
 
     selectWeightedParent(pool) {
@@ -246,11 +388,13 @@ export class EvolutionSystem {
 
     getMedianFitness(sortedGenomes = null) {
         const sorted = sortedGenomes ?? this.getSortedGenomes();
+
         if (sorted.length === 0) {
             return 0;
         }
 
         const middle = Math.floor(sorted.length / 2);
+
         if (sorted.length % 2 === 0) {
             return (sorted[middle - 1].fitness + sorted[middle].fitness) * 0.5;
         }
