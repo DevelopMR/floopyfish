@@ -680,6 +680,8 @@ export class Game {
       genomeId: actor.genome.id,
       loopsCompleted: actor.trial?.loopsCompleted ?? 0,
       fitness: actor.trial?.fitness ?? 0,
+      baseIconIndex: actor.genome.appearance?.baseIconIndex ?? null,
+      colorFamily: actor.genome.appearance?.colorFamily ?? null,
       appearance: actor.genome.appearance,
     });
 

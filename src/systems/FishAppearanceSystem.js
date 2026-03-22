@@ -226,6 +226,117 @@ export class FishAppearanceSystem {
         };
     }
 
+    isDynamicHeroFamily(colorFamily) {
+        return typeof colorFamily === "string" && colorFamily.startsWith("hero-line-");
+    }
+
+    hashString(value) {
+        let hash = 2166136261;
+
+        for (let i = 0; i < value.length; i += 1) {
+            hash ^= value.charCodeAt(i);
+            hash = Math.imul(hash, 16777619);
+        }
+
+        return hash >>> 0;
+    }
+
+    rgbToHsl(r, g, b) {
+        const rn = r / 255;
+        const gn = g / 255;
+        const bn = b / 255;
+
+        const max = Math.max(rn, gn, bn);
+        const min = Math.min(rn, gn, bn);
+        const l = (max + min) / 2;
+
+        if (max === min) {
+            return { h: 0, s: 0, l };
+        }
+
+        const d = max - min;
+        const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+
+        let h = 0;
+
+        switch (max) {
+            case rn:
+                h = (gn - bn) / d + (gn < bn ? 6 : 0);
+                break;
+            case gn:
+                h = (bn - rn) / d + 2;
+                break;
+            default:
+                h = (rn - gn) / d + 4;
+                break;
+        }
+
+        h /= 6;
+
+        return { h, s, l };
+    }
+
+    hslToRgb(h, s, l) {
+        if (s === 0) {
+            const gray = Math.round(l * 255);
+            return { r: gray, g: gray, b: gray };
+        }
+
+        const hueToChannel = (p, q, t) => {
+            let value = t;
+            if (value < 0) value += 1;
+            if (value > 1) value -= 1;
+            if (value < 1 / 6) return p + (q - p) * 6 * value;
+            if (value < 1 / 2) return q;
+            if (value < 2 / 3) return p + (q - p) * (2 / 3 - value) * 6;
+            return p;
+        };
+
+        const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+        const p = 2 * l - q;
+
+        const r = hueToChannel(p, q, h + 1 / 3);
+        const g = hueToChannel(p, q, h);
+        const b = hueToChannel(p, q, h - 1 / 3);
+
+        return {
+            r: Math.round(r * 255),
+            g: Math.round(g * 255),
+            b: Math.round(b * 255),
+        };
+    }
+
+    rgbToTint(r, g, b) {
+        return ((r & 0xff) << 16) | ((g & 0xff) << 8) | (b & 0xff);
+    }
+
+    tintToRgb(tint) {
+        return {
+            r: (tint >> 16) & 0xff,
+            g: (tint >> 8) & 0xff,
+            b: tint & 0xff,
+        };
+    }
+
+    createDynamicHeroPalette(colorFamily) {
+        const hash = this.hashString(colorFamily);
+
+        const hue = (hash % 360) / 360;
+        const saturation = 0.55 + (((hash >> 9) % 18) / 100);   // 0.55 - 0.72
+        const lightness = 0.56 + (((hash >> 17) % 10) / 100);   // 0.56 - 0.65
+
+        const { r, g, b } = this.hslToRgb(hue, saturation, lightness);
+        const tint = this.rgbToTint(r, g, b);
+
+        return {
+            tint,
+            textureIndex: this.baseIndex,
+            alpha: 1,
+            brightness: 1.06,
+        };
+    }
+
+
     resolvePalette(appearance) {
         const family = appearance.colorFamily;
 
@@ -233,34 +344,50 @@ export class FishAppearanceSystem {
             return this.familyPalette[family];
         }
 
+        if (this.isDynamicHeroFamily(family)) {
+            return this.createDynamicHeroPalette(family);
+        }
+
         return this.familyPalette.base;
     }
 
     resolveTextureIndex(appearance, palette) {
+        if (Number.isInteger(appearance.baseIconIndex)) {
+            return appearance.baseIconIndex;
+        }
+
         if (Number.isInteger(palette.textureIndex)) {
             return palette.textureIndex;
         }
 
-        return appearance.baseIconIndex;
+        return this.baseIndex;
     }
 
     resolveTint(appearance, palette) {
         let tint = palette.tint ?? 0xffffff;
 
         if (appearance.heroEvent === "firstLooper") {
-            tint = this.blendTint(tint, 0x9ad8ff, 0.35);
+            tint = this.blendTint(tint, 0xffffff, 0.18);
         }
 
         if (appearance.isHeroLine && appearance.lineageAge >= 1) {
-            tint = this.blendTint(tint, 0xc7f0ff, Math.min(0.14 + appearance.lineageAge * 0.03, 0.30));
+            tint = this.blendTint(
+                tint,
+                0xdff7ff,
+                Math.min(0.10 + appearance.lineageAge * 0.025, 0.24)
+            );
         }
 
         if (appearance.lineageAge >= 3) {
-            tint = this.blendTint(tint, 0xf6e7b7, Math.min((appearance.lineageAge - 2) * 0.05, 0.22));
+            tint = this.blendTint(
+                tint,
+                0xf4e7b2,
+                Math.min((appearance.lineageAge - 2) * 0.04, 0.18)
+            );
         }
 
         if (appearance.wildcardFamily) {
-            tint = this.blendTint(tint, 0x7cf2c3, 0.18);
+            tint = this.blendTint(tint, 0x7cf2c3, 0.14);
         }
 
         return tint;

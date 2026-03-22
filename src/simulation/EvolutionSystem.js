@@ -32,6 +32,8 @@ export class EvolutionSystem {
 
         this.heroEventName = heroEventName;
         this.heroColorFamily = heroColorFamily;
+        this.heroIconChoices = [3, 5];
+        this.heroLineCounter = 0;
 
         this.validateConfiguration();
 
@@ -161,11 +163,24 @@ export class EvolutionSystem {
         this.currentGenerationHeroRecord = null;
     }
 
+    chooseHeroIconIndex() {
+        const choices = this.heroIconChoices;
+        const index = Math.floor(this.random() * choices.length);
+        return choices[index];
+    }
+
+    createHeroColorFamilyToken(genome) {
+        const safeGenomeId = String(genome?.id ?? "unknown").replace(/[^a-zA-Z0-9_-]/g, "");
+        const token = `hero-line-${this.generationIndex}-${this.heroLineCounter}-${safeGenomeId}`;
+        this.heroLineCounter += 1;
+        return token;
+    }
+
     markFirstLooperHero(
         genomeId,
         {
             heroEvent = this.heroEventName,
-            colorFamily = this.heroColorFamily,
+            colorFamily = null,
             baseIconIndex = null,
             resetLineageAge = true,
         } = {}
@@ -180,10 +195,16 @@ export class EvolutionSystem {
             throw new Error(`EvolutionSystem could not find genome for hero mark: ${genomeId}`);
         }
 
+        const resolvedColorFamily =
+            colorFamily ?? this.createHeroColorFamilyToken(genome);
+
+        const resolvedBaseIconIndex =
+            baseIconIndex ?? this.chooseHeroIconIndex();
+
         genome.markHero({
             heroEvent,
-            colorFamily,
-            baseIconIndex: baseIconIndex ?? genome.appearance?.baseIconIndex ?? 0,
+            colorFamily: resolvedColorFamily,
+            baseIconIndex: resolvedBaseIconIndex,
             resetLineageAge,
         });
 
@@ -192,7 +213,8 @@ export class EvolutionSystem {
             generation: this.generationIndex,
             genomeId: genome.id,
             heroEvent,
-            colorFamily,
+            colorFamily: resolvedColorFamily,
+            baseIconIndex: resolvedBaseIconIndex,
             fitnessAtMark: Number.isFinite(genome.fitness) ? genome.fitness : 0,
         };
 
@@ -338,6 +360,7 @@ export class EvolutionSystem {
             heroEvent: null,
             isHeroLine: true,
             colorFamily: heroSource.appearance?.colorFamily || this.heroColorFamily,
+            baseIconIndex: heroSource.appearance?.baseIconIndex ?? 0,
         };
 
         return heroSource.clone({
