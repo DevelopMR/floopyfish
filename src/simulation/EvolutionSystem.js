@@ -144,7 +144,9 @@ export class EvolutionSystem {
         }
 
         const inferredHero = this.genomes.find(
-            (genome) => genome.appearance?.heroEvent === this.heroEventName
+            (genome) =>
+                genome.appearance?.heroEvent === this.heroEventName &&
+                genome.appearance?.isHeroLine
         );
 
         return inferredHero ?? null;
@@ -311,6 +313,8 @@ export class EvolutionSystem {
             bestGenomeId: sorted[0]?.id ?? null,
             heroGenomeId: heroSource?.id ?? null,
             heroCarriedForward: Boolean(heroSource),
+            heroColorFamily: heroSource?.appearance?.colorFamily ?? null,
+            heroIconIndex: heroSource?.appearance?.baseIconIndex ?? null,
         };
 
         this.genomes = nextGeneration;
@@ -360,7 +364,7 @@ export class EvolutionSystem {
             heroEvent: null,
             isHeroLine: true,
             colorFamily: heroSource.appearance?.colorFamily || this.heroColorFamily,
-            baseIconIndex: heroSource.appearance?.baseIconIndex ?? 0,
+            baseIconIndex: heroSource.appearance?.baseIconIndex ?? this.heroIconChoices[0],
         };
 
         return heroSource.clone({
