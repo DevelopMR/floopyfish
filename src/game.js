@@ -273,11 +273,7 @@ export class Game {
       this.fishDisplayConfig
     );
 
-    this.fishAppearanceSystem.applyLineageAppearance(fish, {
-      wrapsUnlocked: 0,
-      isElite: false,
-      isChampion: false,
-    });
+    this.fishAppearanceSystem.applyGenomeAppearance(fish, genome);
 
     this.world.addChild(fish.sprite);
 
@@ -298,6 +294,7 @@ export class Game {
       lastEnvironment: this.baseEnvironmentConfig,
       fitnessRecorded: false,
       isActive: true,
+      heroMarkedThisGeneration: false,
     };
   }
 
@@ -446,6 +443,8 @@ export class Game {
       return;
     }
 
+    const previousLoopCount = actor.trial?.loopsCompleted ?? 0;
+
     const environment = this.trialSystem.getEnvironment(this.baseEnvironmentConfig, actor.trial);
     actor.lastEnvironment = environment;
 
@@ -475,10 +474,13 @@ export class Game {
 
     this.trialSystem.update(actor.fish, actor.trial);
 
+    this.tryMarkGenerationHero(actor, previousLoopCount);
+
     if (actor.trial.deathResolved && !actor.fitnessRecorded) {
       actor.fitnessRecorded = true;
       actor.isActive = false;
       actor.fish.sprite.visible = false;
+
       this.evolutionSystem.recordFitness(actor.genome.id, actor.trial.fitness);
     }
   }
@@ -579,6 +581,8 @@ export class Game {
       eliteCount: summary?.eliteCount ?? 0,
       offspringCount: summary?.offspringCount ?? 0,
       randomCount: summary?.randomCount ?? 0,
+      heroGenomeId: summary?.heroGenomeId ?? null,
+      heroCarriedForward: summary?.heroCarriedForward ?? false,
       nextGeneration: this.currentGenerationNumber,
     });
   }
@@ -635,4 +639,64 @@ export class Game {
 
     this.updateFishMode(delta);
   }
+
+
+  // helpers
+  didActorCompleteNewLoop(actor, previousLoopCount) {
+    const currentLoopCount = actor?.trial?.loopsCompleted ?? 0;
+    return currentLoopCount > previousLoopCount;
+  }
+
+  canBecomeGenerationHero(actor) {
+    if (!actor || !actor.isActive) {
+      return false;
+    }
+
+    if (actor.heroMarkedThisGeneration) {
+      return false;
+    }
+
+    if ((actor.trial?.loopsCompleted ?? 0) < 1) {
+      return false;
+    }
+
+    return !this.evolutionSystem.hasGenerationHero();
+  }
+
+  markActorAsGenerationHero(actor) {
+    if (!actor) {
+      return null;
+    }
+
+    const heroGenome = this.evolutionSystem.markFirstLooperHero(actor.genome.id);
+
+    actor.genome = heroGenome;
+    actor.heroMarkedThisGeneration = true;
+
+    this.fishAppearanceSystem.applyGenomeAppearance(actor.fish, actor.genome);
+
+    console.log("first looper hero marked", {
+      generation: this.currentGenerationNumber,
+      genomeId: actor.genome.id,
+      loopsCompleted: actor.trial?.loopsCompleted ?? 0,
+      fitness: actor.trial?.fitness ?? 0,
+      appearance: actor.genome.appearance,
+    });
+
+    return heroGenome;
+  }
+
+  tryMarkGenerationHero(actor, previousLoopCount) {
+    if (!this.didActorCompleteNewLoop(actor, previousLoopCount)) {
+      return false;
+    }
+
+    if (!this.canBecomeGenerationHero(actor)) {
+      return false;
+    }
+
+    this.markActorAsGenerationHero(actor);
+    return true;
+  }
+
 }
