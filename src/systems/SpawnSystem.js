@@ -45,19 +45,12 @@ export class SpawnSystem {
 
         const phase = this.pressureTime + (pressure.phase ?? 0);
         const pulse = 0.84 + Math.sin(phase * 1.7) * 0.16;
-        const shimmer = 0.96 + Math.sin(phase * 2.9 + 1.4) * 0.04;
 
         pressure.alpha = pulse;
-        /*         pressure.scale.y = shimmer;
-        
-                // subtle vertical breathing
-                pressure.y = Math.sin(phase * 1.15) * 1.4; */
-
 
         pressure.scale.y = 0.985 + Math.sin(phase * 2.9 + 1.4) * 0.02;
         pressure.y = Math.sin(phase * 1.15) * 0.8;
 
-        // leftward flow drift
         pressure.flowOffset ??= 0;
         pressure.flowOffset -= delta * 0.9;
 
@@ -86,7 +79,6 @@ export class SpawnSystem {
         if (last.x < 1280 - this.spawnSpacing) {
             this.spawnSegment(last.x + this.spawnSpacing);
         }
-
     }
 
     spawnSegment(x) {
@@ -99,24 +91,35 @@ export class SpawnSystem {
         this.segments.push(seg);
     }
 
+    destroySegmentGraphics(seg) {
+        const displayObjects = [seg.topGraphic, seg.pressureGraphic, seg.bottomGraphic];
+
+        for (const displayObject of displayObjects) {
+            if (!displayObject) {
+                continue;
+            }
+
+            if (displayObject.parent) {
+                displayObject.parent.removeChild(displayObject);
+            }
+
+            displayObject.destroy({ children: true });
+        }
+    }
+
     cleanupSegments() {
         const cutoff = -this.spawnSpacing;
 
-        this.segments = this.segments.filter(seg => {
+        this.segments = this.segments.filter((seg) => {
             if (seg.x < cutoff) {
-                this.container.removeChild(seg.topGraphic);
-                this.container.removeChild(seg.pressureGraphic);
-                this.container.removeChild(seg.bottomGraphic);
-
+                this.destroySegmentGraphics(seg);
                 return false;
             }
 
             return true;
         });
-
     }
 
-    // utility for finding the leftmost segment, used for determining safe spawn zones in the starting area
     getLeftmostSegment() {
         if (this.segments.length === 0) {
             return null;
@@ -133,7 +136,6 @@ export class SpawnSystem {
         return leftmost;
     }
 
-    // determines a safe spawn point for loop restarts based on the leftmost segment's profiles
     getSafeLoopSpawn(fishRadius = 12) {
         const seg = this.getLeftmostSegment();
 
@@ -141,7 +143,6 @@ export class SpawnSystem {
             return { x: 160, y: 360 };
         }
 
-        const reefGen = this.reefGen;
         const sampleIndex = Math.max(
             0,
             Math.min(
@@ -164,5 +165,4 @@ export class SpawnSystem {
             y: Math.max(minY, Math.min(gapCenterY, maxY)),
         };
     }
-
 }

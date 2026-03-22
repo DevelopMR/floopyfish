@@ -106,7 +106,6 @@ export class Game {
     this.fitnessSystem = new FitnessSystem(this.difficultySystem);
     this.gapRewardSystem = new GapRewardSystem(this.fitnessSystem);
 
-
     this.fishAppearanceSystem = new FishAppearanceSystem({
       sheetPath: "assets/Fish-Icon_set.png",
       layout: { columns: 3, rows: 3 },
@@ -114,12 +113,6 @@ export class Game {
       ghostIndex: 8,
     });
     this.fishAppearanceSystem.initialize();
-
-    /* this.fishDisplayConfig = {
-      displayWidth: 125,
-      displayHeight: 113,
-      radius: 12,
-    }; */
 
     this.fishDisplayConfig = {
       displayWidth: 170,
@@ -238,11 +231,23 @@ export class Game {
     }
   }
 
-  clearActors() {
-    for (const actor of this.actors) {
-      if (actor?.fish?.sprite?.parent) {
+  destroyActor(actor) {
+    if (!actor) {
+      return;
+    }
+
+    if (actor.fish?.sprite) {
+      if (actor.fish.sprite.parent) {
         actor.fish.sprite.parent.removeChild(actor.fish.sprite);
       }
+
+      actor.fish.sprite.destroy();
+    }
+  }
+
+  clearActors() {
+    for (const actor of this.actors) {
+      this.destroyActor(actor);
     }
 
     this.actors = [];

@@ -21,14 +21,29 @@ export class BrainOverlay {
     this.panel = new Graphics();
     this.root.addChild(this.panel);
 
+    this.titleStyle = new TextStyle({
+      fontFamily: "Arial",
+      fontSize: 18,
+      fontWeight: "800",
+      fill: 0xeeffff,
+    });
+
+    this.outputLabelStyle = new TextStyle({
+      fontFamily: "Arial",
+      fontSize: 10,
+      fill: 0xf8f1e0,
+    });
+
+    this.metricStyle = new TextStyle({
+      fontFamily: "Arial",
+      fontSize: 11,
+      fontWeight: "700",
+      fill: 0xcfefff,
+    });
+
     this.titleText = new Text({
       text: "Brain Tank",
-      style: new TextStyle({
-        fontFamily: "Arial",
-        fontSize: 20,
-        fontWeight: "800",
-        fill: 0xeeffff,
-      }),
+      style: this.titleStyle,
     });
     this.root.addChild(this.titleText);
 
@@ -46,19 +61,34 @@ export class BrainOverlay {
       loops: 0,
     };
 
+    this.ensureOutputLabels();
+    this.ensureMetricTexts();
     this.draw();
   }
 
   update({ architecture, inputs, outputs, outputLabels, metrics }) {
-    if (architecture) this.architecture = architecture;
+    let architectureChanged = false;
+
+    if (architecture) {
+      const sameLength = architecture.length === this.architecture.length;
+      const sameValues = sameLength && architecture.every((value, index) => value === this.architecture[index]);
+      architectureChanged = !sameValues;
+      this.architecture = architecture;
+    }
+
     if (inputs) this.inputs = inputs;
     if (outputs) this.outputs = outputs;
     if (outputLabels) this.outputLabelsText = outputLabels;
+
     if (metrics) {
       this.metrics = {
         ...this.metrics,
         ...metrics,
       };
+    }
+
+    if (architectureChanged) {
+      this.syncOutputLabelCount();
     }
 
     this.draw();
@@ -68,6 +98,42 @@ export class BrainOverlay {
     this.width = width;
     this.height = height;
     this.draw();
+  }
+
+  ensureOutputLabels() {
+    this.syncOutputLabelCount();
+  }
+
+  syncOutputLabelCount() {
+    const outputCount = this.architecture[this.architecture.length - 1] ?? 0;
+
+    while (this.outputLabels.length < outputCount) {
+      const label = new Text({
+        text: "",
+        style: this.outputLabelStyle,
+      });
+      this.root.addChild(label);
+      this.outputLabels.push(label);
+    }
+
+    while (this.outputLabels.length > outputCount) {
+      const label = this.outputLabels.pop();
+      this.root.removeChild(label);
+      label.destroy();
+    }
+  }
+
+  ensureMetricTexts() {
+    const targetCount = 4;
+
+    while (this.metricTexts.length < targetCount) {
+      const label = new Text({
+        text: "",
+        style: this.metricStyle,
+      });
+      this.root.addChild(label);
+      this.metricTexts.push(label);
+    }
   }
 
   draw() {
@@ -85,7 +151,7 @@ export class BrainOverlay {
     this.panel.stroke({ color: 0x96e8ff, alpha: 0.5, width: 2 });
 
     this.titleText.x = px + 16 * scale;
-    this.titleText.y = py + 8 * scale;
+    this.titleText.y = py + 9 * scale;
 
     const metricsHeight = 52 * scale;
     const ix = px + 12 * scale;
@@ -110,8 +176,8 @@ export class BrainOverlay {
 
     this.drawConnections(layers);
     this.drawNodes(layers);
-    this.drawOutputLabels(layers[layers.length - 1], px, pw, scale);
-    this.drawMetrics(px, py, pw, ph, scale);
+    this.layoutOutputLabels(layers[layers.length - 1], px, pw, scale);
+    this.layoutMetrics(px, py, pw, ph, scale);
   }
 
   drawConnections(layers) {
@@ -142,7 +208,7 @@ export class BrainOverlay {
         }
 
         if (i === layers.length - 1) {
-          const t = (this.outputs[j] + 1) / 2;
+          const t = ((this.outputs[j] ?? 0) + 1) / 2;
           color = this.mix([94, 229, 217], [255, 164, 120], t);
           radius = 6;
         }
@@ -153,34 +219,28 @@ export class BrainOverlay {
     });
   }
 
-  drawOutputLabels(outputLayer, px, pw, scale) {
-    this.outputLabels.forEach((label) => this.root.removeChild(label));
-    this.outputLabels = [];
+  layoutOutputLabels(outputLayer, px, pw, scale) {
+    const outputCount = outputLayer?.length ?? 0;
 
-    outputLayer.forEach((node, i) => {
+    for (let i = 0; i < this.outputLabels.length; i++) {
+      const label = this.outputLabels[i];
+
+      if (i >= outputCount) {
+        label.visible = false;
+        continue;
+      }
+
+      const node = outputLayer[i];
       const labelText = this.outputLabelsText[i] ?? `out ${i}`;
 
-      const label = new Text({
-        text: labelText,
-        style: new TextStyle({
-          fontFamily: "Arial",
-          fontSize: 10,
-          fill: 0xf8f1e0,
-        }),
-      });
-
+      label.text = labelText;
+      label.visible = true;
       label.x = Math.min(node.x + 8 * scale, px + pw - 40);
       label.y = node.y - 6;
-
-      this.root.addChild(label);
-      this.outputLabels.push(label);
-    });
+    }
   }
 
-  drawMetrics(px, py, pw, ph, scale) {
-    this.metricTexts.forEach((label) => this.root.removeChild(label));
-    this.metricTexts = [];
-
+  layoutMetrics(px, py, pw, ph, scale) {
     const dividerY = py + ph - 60 * scale;
 
     this.panel.moveTo(px + 12 * scale, dividerY);
@@ -215,21 +275,14 @@ export class BrainOverlay {
       },
     ];
 
-    for (const entry of entries) {
-      const label = new Text({
-        text: entry.text,
-        style: new TextStyle({
-          fontFamily: "Arial",
-          fontSize: 11,
-          fontWeight: "700",
-          fill: 0xcfefff,
-        }),
-      });
+    for (let i = 0; i < entries.length; i++) {
+      const entry = entries[i];
+      const label = this.metricTexts[i];
 
+      label.text = entry.text;
       label.x = entry.x;
       label.y = entry.y;
-      this.root.addChild(label);
-      this.metricTexts.push(label);
+      label.visible = true;
     }
   }
 

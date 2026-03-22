@@ -20,7 +20,7 @@ export class TrialSystem {
         this.worldHeight = worldHeight;
 
         this.loopCompleteMargin = 30;
-        this.maxFramesWithoutProgress = 240;
+        this.maxFramesWithoutProgress = 300;
     }
 
     isOutOfBounds(fish) {
