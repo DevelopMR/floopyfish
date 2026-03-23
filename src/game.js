@@ -295,6 +295,9 @@ export class Game {
       fitnessRecorded: false,
       isActive: true,
       heroMarkedThisGeneration: false,
+      tripleWrapMarked: false,
+      clutchWrapMarked: false,
+      deadAppearanceApplied: false,
     };
   }
 
@@ -469,12 +472,19 @@ export class Game {
 
       actor.fish.update(delta, actor.controller, current);
     } else if (actor.trial.isDying) {
+      if (!actor.deadAppearanceApplied) {
+        actor.deadAppearanceApplied = true;
+        this.fishAppearanceSystem.applyDeadAppearance(actor.fish, actor.genome);
+      }
+
       actor.fish.updateDeadFloat(delta, current);
     }
 
     this.trialSystem.update(actor.fish, actor.trial);
 
     this.tryMarkGenerationHero(actor, previousLoopCount);
+    this.tryMarkThreeWrapHero(actor, previousLoopCount);
+    this.tryMarkClutchWrapHero(actor, previousLoopCount);
 
     if (actor.trial.deathResolved && !actor.fitnessRecorded) {
       actor.fitnessRecorded = true;
@@ -698,6 +708,116 @@ export class Game {
     }
 
     this.markActorAsGenerationHero(actor);
+    return true;
+  }
+
+
+  // helpers
+  didActorCompleteNewLoop(actor, previousLoopCount) {
+    return (actor?.trial?.loopsCompleted ?? 0) > previousLoopCount;
+  }
+
+  getLoopBudgetRemaining(actor) {
+    const trial = actor?.trial ?? {};
+    const env = actor?.lastEnvironment ?? {};
+
+    const directRemaining =
+      trial.loopStepsRemaining ??
+      trial.stepsUntilLoopTimeout ??
+      trial.loopTimeoutRemaining ??
+      trial.loopLifeRemaining;
+
+    if (Number.isFinite(directRemaining)) {
+      return directRemaining;
+    }
+
+    const maxBudget =
+      env.loopLifespanSteps ??
+      env.loopStepBudget ??
+      env.loopLifetimeSteps ??
+      env.loopLifetime;
+
+    const spent =
+      trial.stepsSinceLastLoop ??
+      trial.loopAgeSteps ??
+      trial.stepsThisLoop ??
+      0;
+
+    if (Number.isFinite(maxBudget)) {
+      return maxBudget - spent;
+    }
+
+    return Number.POSITIVE_INFINITY;
+  }
+
+  markActorAsGenerationHero(actor) {
+    const heroGenome = this.evolutionSystem.markFirstLooperHero(actor.genome.id);
+    actor.genome = heroGenome;
+    actor.heroMarkedThisGeneration = true;
+    this.fishAppearanceSystem.applyGenomeAppearance(actor.fish, actor.genome);
+  }
+
+  markActorAsSpecialHero(actor, heroEvent) {
+    const promotedGenome = this.evolutionSystem.promoteGenomeVisual(actor.genome.id, {
+      heroEvent,
+      resetLineageAge: false,
+    });
+
+    actor.genome = promotedGenome;
+    this.fishAppearanceSystem.applyGenomeAppearance(actor.fish, actor.genome);
+  }
+
+  tryMarkGenerationHero(actor, previousLoopCount) {
+    if (!this.didActorCompleteNewLoop(actor, previousLoopCount)) {
+      return false;
+    }
+
+    if ((actor.trial?.loopsCompleted ?? 0) < 1) {
+      return false;
+    }
+
+    if (actor.heroMarkedThisGeneration || this.evolutionSystem.hasGenerationHero()) {
+      return false;
+    }
+
+    this.markActorAsGenerationHero(actor);
+    return true;
+  }
+
+  tryMarkThreeWrapHero(actor, previousLoopCount) {
+    if (!this.didActorCompleteNewLoop(actor, previousLoopCount)) {
+      return false;
+    }
+
+    if (actor.tripleWrapMarked) {
+      return false;
+    }
+
+    if ((actor.trial?.loopsCompleted ?? 0) < 3) {
+      return false;
+    }
+
+    actor.tripleWrapMarked = true;
+    this.markActorAsSpecialHero(actor, "firstThreeWrap");
+    return true;
+  }
+
+  tryMarkClutchWrapHero(actor, previousLoopCount) {
+    if (!this.didActorCompleteNewLoop(actor, previousLoopCount)) {
+      return false;
+    }
+
+    if (actor.clutchWrapMarked) {
+      return false;
+    }
+
+    const remaining = this.getLoopBudgetRemaining(actor);
+    if (remaining > 3) {
+      return false;
+    }
+
+    actor.clutchWrapMarked = true;
+    this.markActorAsSpecialHero(actor, "clutchWrap");
     return true;
   }
 

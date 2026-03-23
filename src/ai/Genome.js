@@ -4,11 +4,12 @@ let genomeIdCounter = 1;
 
 const DEFAULT_APPEARANCE = Object.freeze({
     baseIconIndex: 0,
-    heroEvent: null,          // null | "firstLooper" | future hero tags
-    isHeroLine: false,        // true once this genome belongs to a hero lineage
-    colorFamily: "base",      // "base" | "hero" | "wild" | future named families
-    lineageAge: 0,            // generations since lineage marker was established
-    wildcardFamily: null,     // null or string marker for unusual/random line
+    heroEvent: null,
+    isHeroLine: false,
+    colorFamily: "base",
+    lineageAge: 0,
+    wildcardFamily: null,
+    tintHex: 0xffffff,
 });
 
 function isPlainObject(value) {
@@ -18,6 +19,11 @@ function isPlainObject(value) {
 function clampInteger(value, fallback = 0, min = 0) {
     if (!Number.isFinite(value)) return fallback;
     return Math.max(min, Math.floor(value));
+}
+
+function clampTintHex(value, fallback = DEFAULT_APPEARANCE.tintHex) {
+    if (!Number.isFinite(value)) return fallback;
+    return Math.max(0, Math.min(0xffffff, Math.floor(value)));
 }
 
 function normalizeAppearance(appearance = {}) {
@@ -39,6 +45,7 @@ function normalizeAppearance(appearance = {}) {
             typeof source.wildcardFamily === "string" && source.wildcardFamily.trim().length > 0
                 ? source.wildcardFamily.trim()
                 : DEFAULT_APPEARANCE.wildcardFamily,
+        tintHex: clampTintHex(source.tintHex, DEFAULT_APPEARANCE.tintHex),
     };
 }
 
@@ -142,7 +149,7 @@ export class Genome {
     createInheritedAppearance({ incrementLineageAge = true } = {}) {
         const nextAppearance = cloneAppearance(this.appearance);
 
-        if (incrementLineageAge && (nextAppearance.isHeroLine || nextAppearance.wildcardFamily)) {
+        if (incrementLineageAge) {
             nextAppearance.lineageAge += 1;
         }
 
@@ -212,6 +219,7 @@ export class Genome {
         heroEvent = "firstLooper",
         colorFamily = "hero",
         baseIconIndex = this.appearance.baseIconIndex,
+        tintHex = this.appearance.tintHex,
         resetLineageAge = true,
     } = {}) {
         this.appearance = normalizeAppearance({
@@ -220,6 +228,7 @@ export class Genome {
             isHeroLine: true,
             colorFamily,
             baseIconIndex,
+            tintHex,
             lineageAge: resetLineageAge ? 0 : this.appearance.lineageAge,
         });
 
