@@ -1,4 +1,4 @@
-import { Container, Graphics, TilingSprite, Texture } from "pixi.js";
+import { Container, Graphics } from "pixi.js";
 
 class SeededRandom {
     constructor(seed) {
@@ -437,43 +437,29 @@ export class ReefGenerator {
         const palette = this.makeCoralPalette(isTop);
 
         const base = new Graphics();
-        base.poly(path).fill(palette.baseColor);
+        base.poly(path).fill(this.mixColor(palette.shadowColor, palette.baseColor, 0.35));
 
-        const maskShape = new Graphics();
-        maskShape.poly(path).fill(0xffffff);
-
-        const texture = Texture.from("assets/coral_texture2.png");
-        const textured = new TilingSprite({
-            texture,
-            width: this.coralBodyWidth,
-            height: this.maxHeight,
+        const underpaint = new Graphics();
+        underpaint.poly(path).fill({
+            color: palette.baseColor,
+            alpha: 0.18,
         });
-
-        textured.tileScale.set(0.7, 0.7);
-        textured.tilePosition.set(
-            this.random.range(0, 256),
-            this.random.range(0, 256)
-        );
-        textured.tint = palette.textureTint;
-        textured.alpha = 0.16;
-        textured.blendMode = "multiply";
-        textured.mask = maskShape;
 
         const bloomLayer = new Graphics();
         const deco = new Graphics();
 
         const hotspots = this.createCoralHotspots(profile, isTop, palette);
+        const colonySeeds = this.createColonySeeds(profile, isTop, hotspots);
 
-        this.drawClusteredBloomTexture(bloomLayer, profile, isTop, limit, palette, hotspots);
+        this.drawColonyBloomTexture(bloomLayer, profile, isTop, limit, palette, hotspots, colonySeeds);
         this.drawBranchDecorations(deco, profile, isTop, limit, palette);
         this.drawEdgeHighlights(deco, profile, isTop, palette);
         this.drawEdgeLightBand(deco, profile, isTop, limit, palette);
 
         container.addChild(base);
-        container.addChild(textured);
+        container.addChild(underpaint);
         container.addChild(bloomLayer);
         container.addChild(deco);
-        container.addChild(maskShape);
 
         return container;
     }
@@ -481,49 +467,73 @@ export class ReefGenerator {
     makeCoralPalette(isTop) {
         const warmFamilies = [
             {
-                base: [0xf08560, 0xf39d6b],
-                shadow: [0xbf4f61, 0xcd6175],
-                highlight: [0xffd572, 0xffe18e],
-                accent: [0xff9f65, 0xffb77d],
-                textureTint: [0xf2c8a0, 0xf8d3b0],
+                base: [0xf1a07b, 0xf4b08b],
+                shadow: [0xb76568, 0xc3726d],
+                highlight: [0xffdca6, 0xffebbd],
+                accents: [
+                    [0xffc870, 0xffd989],
+                    [0xffb37f, 0xffc49b],
+                    [0xf6a57a, 0xffb08a],
+                    [0xffe2b7, 0xfff0cb],
+                ],
             },
             {
-                base: [0xef8b7d, 0xf6a48f],
-                shadow: [0xbb5770, 0xcb6987],
-                highlight: [0xffc96f, 0xffdb8a],
-                accent: [0xffa97c, 0xffc08a],
-                textureTint: [0xf1c1b1, 0xfad2c3],
+                base: [0xf0a58e, 0xf5b392],
+                shadow: [0xbe6a74, 0xca7672],
+                highlight: [0xffddb1, 0xffebc4],
+                accents: [
+                    [0xffcb83, 0xffdd99],
+                    [0xffbc94, 0xffcda9],
+                    [0xf3a08d, 0xffb19a],
+                    [0xffe4c0, 0xfff1d0],
+                ],
             },
             {
-                base: [0xf39b88, 0xf6ae74],
-                shadow: [0xc05f74, 0xc97261],
-                highlight: [0xffd98f, 0xffe6a8],
-                accent: [0xffb56a, 0xffc684],
-                textureTint: [0xf6c7bc, 0xffd7ca],
+                base: [0xef9b85, 0xf2aa7f],
+                shadow: [0xb85f6f, 0xc86d6a],
+                highlight: [0xffd7a1, 0xffe6b6],
+                accents: [
+                    [0xffc876, 0xffda92],
+                    [0xffb689, 0xffc7a2],
+                    [0xf39c76, 0xffb086],
+                    [0xffe0b4, 0xffedd0],
+                ],
             },
         ];
 
         const coolFamilies = [
             {
-                base: [0xb375ef, 0xcb8fff],
-                shadow: [0x704ab5, 0x874fc4],
-                highlight: [0xffb9df, 0xffc9f2],
-                accent: [0xd79cff, 0xe7b3ff],
-                textureTint: [0xe0cbff, 0xefdcff],
+                base: [0xd6a5f0, 0xe1b4ff],
+                shadow: [0x9469b3, 0xa878c2],
+                highlight: [0xf4d2ff, 0xffe0ff],
+                accents: [
+                    [0xc69cff, 0xd7aeff],
+                    [0xe6b7ff, 0xf3c6ff],
+                    [0xb991f5, 0xca9fff],
+                    [0xffd0ef, 0xffe2f7],
+                ],
             },
             {
-                base: [0xc57ee0, 0xdd95d7],
-                shadow: [0x7a4ca8, 0x9456af],
-                highlight: [0xfab8e3, 0xffc8ee],
-                accent: [0xc99fff, 0xdcb1ff],
-                textureTint: [0xe5d0ff, 0xf0ddff],
+                base: [0xcda0ee, 0xd8b0ff],
+                shadow: [0x8a63ae, 0x9a72ba],
+                highlight: [0xf0cdff, 0xfbdcff],
+                accents: [
+                    [0xc395ff, 0xd3a6ff],
+                    [0xe0b5ff, 0xeec5ff],
+                    [0xaf8aee, 0xc29bff],
+                    [0xf7d0ff, 0xffe0ff],
+                ],
             },
             {
-                base: [0xaa74ff, 0xc68bff],
-                shadow: [0x6343ab, 0x7d4ec0],
-                highlight: [0xf6b8ff, 0xffc7f0],
-                accent: [0xc7a0ff, 0xdab5ff],
-                textureTint: [0xddcbff, 0xecddff],
+                base: [0xe0a3ef, 0xe9b4f6],
+                shadow: [0x9763a8, 0xa96fba],
+                highlight: [0xf9d1ff, 0xffdfff],
+                accents: [
+                    [0xd29fff, 0xe1aeff],
+                    [0xf1bdfc, 0xf9cbff],
+                    [0xc692ec, 0xd7a2f7],
+                    [0xffd3f3, 0xffe3fa],
+                ],
             },
         ];
 
@@ -535,8 +545,10 @@ export class ReefGenerator {
             baseColor: this.randomColor(family.base[0], family.base[1]),
             shadowColor: this.randomColor(family.shadow[0], family.shadow[1]),
             highlightColor: this.randomColor(family.highlight[0], family.highlight[1]),
-            accentColor: this.randomColor(family.accent[0], family.accent[1]),
-            textureTint: this.randomColor(family.textureTint[0], family.textureTint[1]),
+            accentA: this.randomColor(family.accents[0][0], family.accents[0][1]),
+            accentB: this.randomColor(family.accents[1][0], family.accents[1][1]),
+            accentC: this.randomColor(family.accents[2][0], family.accents[2][1]),
+            accentD: this.randomColor(family.accents[3][0], family.accents[3][1]),
         };
     }
 
@@ -544,154 +556,219 @@ export class ReefGenerator {
         const hotspotCount = this.random.int(2, 4);
         const hotspots = [];
 
-        const surfaceMin = isTop ? 60 : 0;
-        const surfaceMax = isTop ? this.maxHeight : this.maxHeight - 60;
-
         for (let i = 0; i < hotspotCount; i++) {
             const centerX = this.random.range(18, this.coralBodyWidth - 18);
             const surfaceY = this.sampleProfileY(profile, centerX);
 
             let centerY;
             if (isTop) {
-                centerY = this.random.range(
-                    Math.min(surfaceY * 0.2, surfaceMin),
-                    Math.max(surfaceY * 0.9, surfaceMin + 18)
-                );
+                centerY = this.random.range(10, Math.max(14, surfaceY - 12));
             } else {
-                const upper = Math.min(this.maxHeight - 18, surfaceY + (this.maxHeight - surfaceY) * 0.75);
-                centerY = this.random.range(surfaceY + 16, Math.max(surfaceY + 18, upper));
+                centerY = this.random.range(surfaceY + 12, this.maxHeight - 10);
             }
 
-            const radius = this.random.range(24, 48);
-            const warmth = this.random.range(0.18, 0.82);
+            const radius = this.random.range(22, 42);
+            const accentRoll = this.random.next();
+
+            let color = palette.accentA;
+            if (accentRoll > 0.25 && accentRoll <= 0.5) color = palette.accentB;
+            if (accentRoll > 0.5 && accentRoll <= 0.75) color = palette.accentC;
+            if (accentRoll > 0.75) color = palette.accentD;
 
             hotspots.push({
                 x: centerX,
                 y: centerY,
                 radius,
-                color: this.mixColor(palette.highlightColor, palette.accentColor, warmth),
-                strength: this.random.range(0.35, 0.8),
+                color,
+                strength: this.random.range(0.35, 0.82),
             });
         }
 
         return hotspots;
     }
 
-    drawClusteredBloomTexture(graphics, profile, isTop, limit, palette, hotspots) {
-        const clusterCount = this.random.int(34, 52);
+    createColonySeeds(profile, isTop, hotspots) {
+        const colonyCount = this.random.int(20, 30);
+        const seeds = [];
 
-        for (let i = 0; i < clusterCount; i++) {
-            const anchorX = this.random.range(8, this.coralBodyWidth - 8);
-            const surfaceY = this.sampleProfileY(profile, anchorX);
+        for (let i = 0; i < colonyCount; i++) {
+            const x = this.random.range(8, this.coralBodyWidth - 8);
+            const surfaceY = this.sampleProfileY(profile, x);
 
-            let anchorY;
+            let y;
             if (isTop) {
-                if (surfaceY < 18) {
-                    continue;
-                }
-                anchorY = this.random.range(8, Math.max(10, surfaceY - 8));
+                if (surfaceY < 18) continue;
+                y = this.random.range(8, Math.max(10, surfaceY - 8));
             } else {
-                if (surfaceY > this.maxHeight - 18) {
-                    continue;
-                }
-                anchorY = this.random.range(surfaceY + 8, this.maxHeight - 8);
+                if (surfaceY > this.maxHeight - 18) continue;
+                y = this.random.range(surfaceY + 8, this.maxHeight - 8);
             }
 
-            if (!this.isPointInsideCoral(anchorX, anchorY, profile, isTop)) {
+            if (!this.isPointInsideCoral(x, y, profile, isTop)) {
                 continue;
             }
 
-            const majorRadius = this.random.range(5.5, 10.5);
-            const lobeCount = this.random.int(5, 9);
-            const bloomColor = this.getBloomColor(anchorX, anchorY, surfaceY, isTop, palette, hotspots);
-            const shadowColor = this.mixColor(bloomColor, palette.shadowColor, 0.5 + this.random.range(0, 0.2));
-            const highlightColor = this.mixColor(bloomColor, palette.highlightColor, 0.45 + this.random.range(0, 0.25));
-
-            if (this.random.chance(0.72)) {
-                const shadowOffsetX = this.random.range(-2.4, 2.4);
-                const shadowOffsetY = isTop
-                    ? this.random.range(1.4, 3.6)
-                    : this.random.range(-3.6, -1.4);
-
-                graphics.circle(anchorX + shadowOffsetX, anchorY + shadowOffsetY, majorRadius * 0.95);
-                graphics.fill({
-                    color: shadowColor,
-                    alpha: 0.14,
-                });
+            let hotspotBias = 0;
+            for (const hotspot of hotspots) {
+                const dx = x - hotspot.x;
+                const dy = y - hotspot.y;
+                const d = Math.sqrt(dx * dx + dy * dy);
+                const influence = this.clamp(1 - d / hotspot.radius, 0, 1);
+                hotspotBias = Math.max(hotspotBias, influence);
             }
 
-            for (let l = 0; l < lobeCount; l++) {
-                const angle = (Math.PI * 2 * l) / lobeCount + this.random.range(-0.22, 0.22);
-                const distance = majorRadius * this.random.range(0.2, 0.62);
-                const lobeRadius = majorRadius * this.random.range(0.34, 0.5);
+            seeds.push({
+                x,
+                y,
+                radius: this.random.range(7, 14),
+                density: this.random.range(0.7, 1.25) + hotspotBias * 0.5,
+                variety: this.random.range(0.25, 0.95),
+            });
+        }
 
-                const lx = anchorX + Math.cos(angle) * distance;
-                const ly = anchorY + Math.sin(angle) * distance;
+        return seeds;
+    }
 
-                if (!this.isPointInsideCoral(lx, ly, profile, isTop)) {
+    drawColonyBloomTexture(graphics, profile, isTop, limit, palette, hotspots, colonySeeds) {
+        for (const colony of colonySeeds) {
+            const bloomCount = Math.round(this.random.range(7, 14) * colony.density);
+
+            for (let i = 0; i < bloomCount; i++) {
+                const angle = this.random.range(0, Math.PI * 2);
+                const dist = this.random.range(0, colony.radius);
+                const anchorX = colony.x + Math.cos(angle) * dist;
+                const anchorY = colony.y + Math.sin(angle) * dist * 0.88;
+
+                if (!this.isPointInsideCoral(anchorX, anchorY, profile, isTop)) {
                     continue;
                 }
 
-                graphics.circle(lx, ly, lobeRadius);
-                graphics.fill({
-                    color: bloomColor,
-                    alpha: 0.34,
-                });
-            }
+                const surfaceY = this.sampleProfileY(profile, anchorX);
+                const bloomRadius = this.random.range(3.8, 8.8) * this.random.range(0.9, 1.15);
+                const lobeCount = this.random.int(4, 8);
 
-            graphics.circle(anchorX, anchorY, majorRadius * this.random.range(0.45, 0.68));
-            graphics.fill({
-                color: bloomColor,
-                alpha: 0.42,
-            });
+                const bloomColor = this.getBloomColor(
+                    anchorX,
+                    anchorY,
+                    surfaceY,
+                    isTop,
+                    palette,
+                    hotspots,
+                    colony.variety
+                );
 
-            graphics.circle(
-                anchorX + this.random.range(-0.9, 0.9),
-                anchorY + this.random.range(-0.9, 0.9),
-                majorRadius * this.random.range(0.16, 0.28)
-            );
-            graphics.fill({
-                color: highlightColor,
-                alpha: 0.42,
-            });
+                const shadowColor = this.mixColor(bloomColor, palette.shadowColor, 0.5 + this.random.range(0.05, 0.22));
+                const centerColor = this.mixColor(bloomColor, palette.highlightColor, 0.36 + this.random.range(0.08, 0.22));
+                const petalColor = this.mixColor(bloomColor, palette.accentD, this.random.range(0.08, 0.22));
 
-            if (this.random.chance(0.32)) {
-                const neighborCount = this.random.int(2, 4);
+                if (this.random.chance(0.78)) {
+                    const sx = anchorX + this.random.range(-1.8, 1.8);
+                    const sy = isTop
+                        ? anchorY + this.random.range(1.2, 3.0)
+                        : anchorY + this.random.range(-3.0, -1.2);
 
-                for (let n = 0; n < neighborCount; n++) {
-                    const nx = anchorX + this.random.range(-majorRadius * 1.25, majorRadius * 1.25);
-                    const ny = anchorY + this.random.range(-majorRadius * 1.1, majorRadius * 1.1);
+                    graphics.circle(sx, sy, bloomRadius * this.random.range(0.78, 0.98));
+                    graphics.fill({
+                        color: shadowColor,
+                        alpha: 0.11,
+                    });
+                }
 
-                    if (!this.isPointInsideCoral(nx, ny, profile, isTop)) {
+                for (let l = 0; l < lobeCount; l++) {
+                    const lobeAngle = (Math.PI * 2 * l) / lobeCount + this.random.range(-0.25, 0.25);
+                    const lobeDist = bloomRadius * this.random.range(0.22, 0.58);
+                    const lobeRadius = bloomRadius * this.random.range(0.26, 0.48);
+
+                    const lx = anchorX + Math.cos(lobeAngle) * lobeDist;
+                    const ly = anchorY + Math.sin(lobeAngle) * lobeDist;
+
+                    if (!this.isPointInsideCoral(lx, ly, profile, isTop)) {
                         continue;
                     }
 
-                    const nr = majorRadius * this.random.range(0.34, 0.58);
-                    const nColor = this.mixColor(bloomColor, palette.accentColor, this.random.range(0.12, 0.4));
+                    const lobeMix = this.random.range(0.05, 0.28);
+                    const lobeColor = this.mixColor(bloomColor, petalColor, lobeMix);
 
-                    graphics.circle(nx, ny, nr);
+                    graphics.circle(lx, ly, lobeRadius);
                     graphics.fill({
-                        color: nColor,
-                        alpha: 0.22,
+                        color: lobeColor,
+                        alpha: 0.3,
                     });
+                }
 
-                    graphics.circle(
-                        nx + this.random.range(-0.6, 0.6),
-                        ny + this.random.range(-0.6, 0.6),
-                        nr * this.random.range(0.18, 0.26)
-                    );
-                    graphics.fill({
-                        color: highlightColor,
-                        alpha: 0.22,
-                    });
+                graphics.circle(anchorX, anchorY, bloomRadius * this.random.range(0.34, 0.58));
+                graphics.fill({
+                    color: bloomColor,
+                    alpha: 0.36,
+                });
+
+                graphics.circle(
+                    anchorX + this.random.range(-0.8, 0.8),
+                    anchorY + this.random.range(-0.8, 0.8),
+                    bloomRadius * this.random.range(0.12, 0.24)
+                );
+                graphics.fill({
+                    color: centerColor,
+                    alpha: 0.4,
+                });
+
+                if (this.random.chance(0.42)) {
+                    const neighborCount = this.random.int(1, 3);
+
+                    for (let n = 0; n < neighborCount; n++) {
+                        const nx = anchorX + this.random.range(-bloomRadius * 1.05, bloomRadius * 1.05);
+                        const ny = anchorY + this.random.range(-bloomRadius * 0.95, bloomRadius * 0.95);
+
+                        if (!this.isPointInsideCoral(nx, ny, profile, isTop)) {
+                            continue;
+                        }
+
+                        const nr = bloomRadius * this.random.range(0.24, 0.5);
+                        const nColor = this.mixColor(
+                            bloomColor,
+                            this.pickNeighborAccent(palette),
+                            this.random.range(0.16, 0.42)
+                        );
+
+                        graphics.circle(nx, ny, nr);
+                        graphics.fill({
+                            color: nColor,
+                            alpha: 0.22,
+                        });
+
+                        if (this.random.chance(0.45)) {
+                            graphics.circle(
+                                nx + this.random.range(-0.5, 0.5),
+                                ny + this.random.range(-0.5, 0.5),
+                                nr * this.random.range(0.12, 0.2)
+                            );
+                            graphics.fill({
+                                color: centerColor,
+                                alpha: 0.22,
+                            });
+                        }
+                    }
                 }
             }
         }
     }
 
-    getBloomColor(x, y, surfaceY, isTop, palette, hotspots) {
+    pickNeighborAccent(palette) {
+        const roll = this.random.next();
+        if (roll < 0.25) return palette.accentA;
+        if (roll < 0.5) return palette.accentB;
+        if (roll < 0.75) return palette.accentC;
+        return palette.accentD;
+    }
+
+    getBloomColor(x, y, surfaceY, isTop, palette, hotspots, colonyVariety = 0.5) {
         const depthT = this.getCoralDepthFactor(y, surfaceY, isTop);
-        let base = this.mixColor(palette.baseColor, palette.highlightColor, 0.14 + depthT * 0.28);
+
+        let base = this.mixColor(
+            this.mixColor(palette.baseColor, palette.accentA, 0.16 + colonyVariety * 0.18),
+            palette.highlightColor,
+            0.08 + depthT * 0.18
+        );
 
         for (const hotspot of hotspots) {
             const dx = x - hotspot.x;
@@ -705,6 +782,15 @@ export class ReefGenerator {
 
             const eased = influence * influence * (3 - 2 * influence);
             base = this.mixColor(base, hotspot.color, eased * hotspot.strength);
+        }
+
+        const speciesRoll = this.random.next();
+        if (speciesRoll < 0.22) {
+            base = this.mixColor(base, palette.accentB, 0.18 + colonyVariety * 0.16);
+        } else if (speciesRoll < 0.44) {
+            base = this.mixColor(base, palette.accentC, 0.16 + colonyVariety * 0.18);
+        } else if (speciesRoll < 0.64) {
+            base = this.mixColor(base, palette.accentD, 0.1 + colonyVariety * 0.12);
         }
 
         return base;
@@ -783,8 +869,8 @@ export class ReefGenerator {
             const midX = base.x + bend * 0.5;
             const tipX = base.x + bend;
 
-            const bodyColor = this.mixColor(palette.baseColor, palette.highlightColor, this.random.range(0.2, 0.55));
-            const capColor = this.mixColor(palette.highlightColor, palette.accentColor, this.random.range(0.2, 0.45));
+            const bodyColor = this.mixColor(palette.baseColor, palette.highlightColor, this.random.range(0.2, 0.5));
+            const capColor = this.mixColor(this.pickNeighborAccent(palette), palette.highlightColor, this.random.range(0.18, 0.36));
 
             const bodyPath = [
                 base.x - halfWidth, base.y,
@@ -811,6 +897,7 @@ export class ReefGenerator {
                 );
 
                 const nubWidth = halfWidth * 0.55;
+                const nubColor = this.mixColor(bodyColor, this.pickNeighborAccent(palette), 0.24);
 
                 const nubPath = [
                     nubBaseX - nubWidth * 0.6, nubBaseY,
@@ -819,7 +906,7 @@ export class ReefGenerator {
                     nubBaseX + nubWidth * 0.6, nubBaseY
                 ];
 
-                graphics.poly(nubPath).fill(bodyColor);
+                graphics.poly(nubPath).fill(nubColor);
                 graphics.circle(nubTipX, nubTipY, nubWidth * 0.45).fill(capColor);
             }
         }
@@ -858,7 +945,7 @@ export class ReefGenerator {
     }
 
     drawEdgeLightBand(graphics, profile, isTop, limit, palette) {
-        const color = this.mixColor(palette.highlightColor, 0xffffff, 0.22);
+        const color = this.mixColor(palette.highlightColor, 0xffffff, 0.24);
 
         for (let i = 1; i < profile.length - 1; i++) {
             const p0 = profile[i - 1];
@@ -891,15 +978,15 @@ export class ReefGenerator {
 
             graphics.poly(path).fill({
                 color,
-                alpha: 0.26,
+                alpha: 0.24,
             });
         }
     }
 
     drawEdgeHighlights(graphics, profile, isTop, palette) {
         const color = isTop
-            ? this.mixColor(this.branchStrokeTop, palette.highlightColor, 0.45)
-            : this.mixColor(this.branchStrokeBottom, palette.highlightColor, 0.45);
+            ? this.mixColor(this.branchStrokeTop, palette.highlightColor, 0.42)
+            : this.mixColor(this.branchStrokeBottom, palette.highlightColor, 0.42);
 
         for (let i = 2; i < profile.length - 2; i += this.random.int(3, 6)) {
             const p = profile[i];
