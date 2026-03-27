@@ -77,9 +77,17 @@ export class BrainOverlay {
       this.architecture = architecture;
     }
 
-    if (inputs) this.inputs = inputs;
-    if (outputs) this.outputs = outputs;
-    if (outputLabels) this.outputLabelsText = outputLabels;
+    if (inputs) {
+      this.inputs = inputs;
+    }
+
+    if (outputs) {
+      this.outputs = outputs;
+    }
+
+    if (outputLabels) {
+      this.outputLabelsText = outputLabels;
+    }
 
     if (metrics) {
       this.metrics = {
@@ -194,7 +202,7 @@ export class BrainOverlay {
     this.drawNetworkFrame(ix, iy, iw, ih, scale);
     this.drawConnections(layers, scale);
     this.drawNodes(layers, scale);
-    this.layoutOutputLabels(layers[layers.length - 1], px, pw, scale);
+    this.layoutOutputLabels(layers[layers.length - 1], px, py, pw, scale);
     this.layoutMetrics(px, py, pw, ph, scale);
   }
 
@@ -205,16 +213,16 @@ export class BrainOverlay {
   }
 
   drawConnections(layers, scale) {
-    const lastLayerIndex = layers.length - 2;
-
     for (let l = 0; l < layers.length - 1; l++) {
       for (let ai = 0; ai < layers[l].length; ai++) {
         const a = layers[l][ai];
+        const sourceActivation = this.getLayerNodeActivation(l, ai, layers.length);
 
         for (let bi = 0; bi < layers[l + 1].length; bi++) {
           const b = layers[l + 1][bi];
+          const targetActivation = this.getLayerNodeActivation(l + 1, bi, layers.length);
 
-          const style = this.getConnectionStyle(l, lastLayerIndex, ai, bi, layers[l].length, layers[l + 1].length);
+          const style = this.getConnectionStyle(l, sourceActivation, targetActivation);
 
           this.panel.moveTo(a.x, a.y);
           this.panel.lineTo(b.x, b.y);
@@ -228,33 +236,66 @@ export class BrainOverlay {
     }
   }
 
-  getConnectionStyle(layerIndex, lastLayerIndex, fromIndex, toIndex, fromCount, toCount) {
-    const fromT = fromCount <= 1 ? 0.5 : fromIndex / (fromCount - 1);
-    const toT = toCount <= 1 ? 0.5 : toIndex / (toCount - 1);
-    const bridgeT = (fromT + toT) * 0.5;
-
+  getLayerNodeActivation(layerIndex, nodeIndex, totalLayers) {
     if (layerIndex === 0) {
+      return this.normalizeUnsigned(this.inputs[nodeIndex] ?? 0);
+    }
+
+    if (layerIndex === totalLayers - 1) {
+      return this.normalizeSigned(this.outputs[nodeIndex] ?? 0);
+    }
+
+    return nodeIndex;
+  }
+
+  getConnectionStyle(layerIndex, sourceActivation, targetActivation) {
+    const isInputBridge = layerIndex === 0;
+    const isOutputBridge = layerIndex === this.architecture.length - 2;
+
+    let intensity;
+    let color;
+
+    if (isInputBridge) {
+      const src = Number.isFinite(sourceActivation) ? sourceActivation : 0.5;
+      const dst = Number.isFinite(targetActivation) ? targetActivation : 0.5;
+      intensity = this.clamp((src * 0.7) + (dst * 0.3), 0, 1);
+      color = this.mix([72, 238, 255], [255, 205, 114], intensity);
       return {
-        color: this.mix([88, 242, 255], [120, 255, 204], bridgeT),
-        alpha: 0.16 + bridgeT * 0.06,
-        width: 1.15,
+        color,
+        alpha: 0.08 + intensity * 0.18,
+        width: 0.9 + intensity * 0.55,
       };
     }
 
-    if (layerIndex === lastLayerIndex) {
-      const outputIndex = Math.min(this.outputs.length - 1, toIndex);
-      const outputSignal = this.normalizeSigned(this.outputs[outputIndex] ?? 0);
+    if (isOutputBridge) {
+      const dst = Number.isFinite(targetActivation) ? targetActivation : 0.5;
+      const srcPseudo = Number.isFinite(sourceActivation)
+        ? this.normalizePseudoHidden(sourceActivation)
+        : 0.5;
+
+      intensity = this.clamp((srcPseudo * 0.35) + (dst * 0.65), 0, 1);
+      color = this.mix([92, 255, 222], [255, 145, 114], intensity);
       return {
-        color: this.mix([124, 255, 226], [255, 163, 122], outputSignal),
-        alpha: 0.18 + outputSignal * 0.08,
-        width: 1.25,
+        color,
+        alpha: 0.1 + intensity * 0.22,
+        width: 0.95 + intensity * 0.7,
       };
     }
+
+    const srcPseudo = Number.isFinite(sourceActivation)
+      ? this.normalizePseudoHidden(sourceActivation)
+      : 0.5;
+    const dstPseudo = Number.isFinite(targetActivation)
+      ? this.normalizePseudoHidden(targetActivation)
+      : 0.5;
+
+    intensity = this.clamp((srcPseudo + dstPseudo) * 0.5, 0, 1);
+    color = this.mix([88, 222, 255], [170, 248, 255], intensity);
 
     return {
-      color: this.mix([92, 226, 255], [157, 247, 255], bridgeT),
-      alpha: 0.12 + bridgeT * 0.05,
-      width: 1.0,
+      color,
+      alpha: 0.07 + intensity * 0.12,
+      width: 0.8 + intensity * 0.35,
     };
   }
 
@@ -301,7 +342,7 @@ export class BrainOverlay {
     });
   }
 
-  layoutOutputLabels(outputLayer, px, pw, scale) {
+  layoutOutputLabels(outputLayer, px, py, pw, scale) {
     const outputCount = outputLayer?.length ?? 0;
 
     for (let i = 0; i < this.outputLabels.length; i++) {
@@ -317,8 +358,19 @@ export class BrainOverlay {
 
       label.text = labelText;
       label.visible = true;
-      label.x = Math.min(node.x + 12 * scale, px + pw - 58 * scale);
-      label.y = node.y - 7 * scale;
+
+      if (i === 0) {
+        label.x = Math.min(node.x - label.width * 0.5, px + pw - label.width - 8 * scale);
+        label.x = Math.max(label.x, px + 8 * scale);
+        label.y = node.y - 20 * scale;
+      } else if (i === outputCount - 1) {
+        label.x = Math.min(node.x - label.width * 0.5, px + pw - label.width - 8 * scale);
+        label.x = Math.max(label.x, px + 8 * scale);
+        label.y = node.y + 8 * scale;
+      } else {
+        label.x = Math.min(node.x + 12 * scale, px + pw - label.width - 8 * scale);
+        label.y = node.y - 6 * scale;
+      }
     }
   }
 
@@ -379,6 +431,19 @@ export class BrainOverlay {
 
   normalizeUnsigned(value) {
     return Math.max(0, Math.min(1, value));
+  }
+
+  normalizePseudoHidden(indexValue) {
+    if (!Number.isFinite(indexValue)) {
+      return 0.5;
+    }
+
+    const normalized = Math.sin(indexValue * 1.61803398875) * 0.5 + 0.5;
+    return this.clamp(normalized, 0, 1);
+  }
+
+  clamp(value, min, max) {
+    return Math.max(min, Math.min(max, value));
   }
 
   mix(a, b, t) {
