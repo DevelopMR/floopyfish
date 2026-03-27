@@ -32,6 +32,10 @@ export class HudOverlay {
             iconCardH: 62,
 
             iconInset: 8,
+
+            scoreColumnInset: 12,
+            loopColumnInset: 12,
+            statsDividerRatio: 0.64,
         };
 
         this.panel = new Graphics();
@@ -68,12 +72,8 @@ export class HudOverlay {
         this.modeIconSprite.visible = false;
         this.modeIconSprite.eventMode = "none";
         this.modeIconSprite.cursor = "default";
-        /* this.modeIconSprite.on("pointertap", () => {
-            this.onModeButtonPressed?.();
-        }); */
         this.root.addChild(this.modeIconSprite);
 
-        // bigger hit area for easier clicking, since the mode icon can be small
         this.modeButtonHitArea = new Graphics();
         this.modeButtonHitArea.eventMode = "static";
         this.modeButtonHitArea.cursor = "pointer";
@@ -82,7 +82,6 @@ export class HudOverlay {
             this.onModeButtonPressed?.();
         });
         this.root.addChild(this.modeButtonHitArea);
-
 
         this.mode = "human";
         this.onModeButtonPressed = null;
@@ -177,6 +176,8 @@ export class HudOverlay {
 
         if (mode) {
             this.setMode(mode);
+        } else {
+            this.draw();
         }
     }
 
@@ -197,6 +198,18 @@ export class HudOverlay {
     formatScore(score) {
         const safe = Number.isFinite(score) ? score : 0;
         return Math.round(safe).toLocaleString();
+    }
+
+    fitValueText(textObject, maxWidth, minScale = 0.82) {
+        textObject.scale.set(1);
+
+        const safeMaxWidth = Math.max(1, maxWidth);
+        if (textObject.width <= safeMaxWidth) {
+            return;
+        }
+
+        const nextScale = Math.max(minScale, safeMaxWidth / Math.max(1, textObject.width));
+        textObject.scale.set(nextScale);
     }
 
     draw() {
@@ -245,7 +258,6 @@ export class HudOverlay {
         this.drawCard(statsCard.x, statsCard.y, statsCard.w, statsCard.h);
         this.drawCard(iconCard.x, iconCard.y, iconCard.w, iconCard.h);
 
-        // update mode button hit area to match icon card
         this.modeButtonHitArea.clear();
         this.modeButtonHitArea.roundRect(
             iconCard.x,
@@ -256,8 +268,7 @@ export class HudOverlay {
         );
         this.modeButtonHitArea.fill({ color: 0xffffff, alpha: 0.001 });
 
-        // divider between stats and mode icon
-        const dividerX = statsCard.x + statsCard.w * 0.55;
+        const dividerX = statsCard.x + statsCard.w * l.statsDividerRatio;
         this.panel.moveTo(dividerX, statsCard.y + 8 * this.panelScale);
         this.panel.lineTo(dividerX, statsCard.y + statsCard.h - 8 * this.panelScale);
         this.panel.stroke({ color: 0x78d7f5, alpha: 0.22, width: 2 });
@@ -276,15 +287,26 @@ export class HudOverlay {
             this.panel.stroke({ color: 0x9cf6ff, alpha: 0.42, width: 2 });
         }
 
-        this.scoreLabel.x = statsCard.x + 16 * this.panelScale;
+        const scoreColumnX = statsCard.x + l.scoreColumnInset * this.panelScale;
+        const loopColumnX = dividerX + l.loopColumnInset * this.panelScale;
+
+        this.scoreLabel.x = scoreColumnX;
         this.scoreLabel.y = statsCard.y + 10 * this.panelScale;
-        this.scoreValue.x = statsCard.x + 16 * this.panelScale;
+
+        this.scoreValue.x = scoreColumnX;
         this.scoreValue.y = statsCard.y + 28 * this.panelScale;
 
-        this.loopLabel.x = dividerX + 14 * this.panelScale;
+        this.loopLabel.x = loopColumnX;
         this.loopLabel.y = statsCard.y + 10 * this.panelScale;
-        this.loopValue.x = dividerX + 14 * this.panelScale;
+
+        this.loopValue.x = loopColumnX;
         this.loopValue.y = statsCard.y + 28 * this.panelScale;
+
+        const scoreColumnWidth = dividerX - scoreColumnX - 10 * this.panelScale;
+        const loopColumnWidth = statsCard.x + statsCard.w - loopColumnX - 8 * this.panelScale;
+
+        this.fitValueText(this.scoreValue, scoreColumnWidth, 0.78);
+        this.fitValueText(this.loopValue, loopColumnWidth, 0.9);
 
         this.layoutModeIcon(iconCard);
     }

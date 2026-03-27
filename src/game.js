@@ -717,6 +717,22 @@ export class Game {
     return (actor?.trial?.loopsCompleted ?? 0) > previousLoopCount;
   }
 
+  canBecomeGenerationHero(actor) {
+    if (!actor || !actor.isActive) {
+      return false;
+    }
+
+    if (actor.heroMarkedThisGeneration) {
+      return false;
+    }
+
+    if ((actor.trial?.loopsCompleted ?? 0) < 1) {
+      return false;
+    }
+
+    return !this.evolutionSystem.hasGenerationHero();
+  }
+
   getLoopBudgetRemaining(actor) {
     const trial = actor?.trial ?? {};
     const env = actor?.lastEnvironment ?? {};
@@ -751,10 +767,28 @@ export class Game {
   }
 
   markActorAsGenerationHero(actor) {
+    if (!actor) {
+      return null;
+    }
+
     const heroGenome = this.evolutionSystem.markFirstLooperHero(actor.genome.id);
+
     actor.genome = heroGenome;
     actor.heroMarkedThisGeneration = true;
+
     this.fishAppearanceSystem.applyGenomeAppearance(actor.fish, actor.genome);
+
+    console.log("first looper hero marked", {
+      generation: this.currentGenerationNumber,
+      genomeId: actor.genome.id,
+      loopsCompleted: actor.trial?.loopsCompleted ?? 0,
+      fitness: actor.trial?.fitness ?? 0,
+      baseIconIndex: actor.genome.appearance?.baseIconIndex ?? null,
+      colorFamily: actor.genome.appearance?.colorFamily ?? null,
+      appearance: actor.genome.appearance,
+    });
+
+    return heroGenome;
   }
 
   markActorAsSpecialHero(actor, heroEvent) {
@@ -772,11 +806,7 @@ export class Game {
       return false;
     }
 
-    if ((actor.trial?.loopsCompleted ?? 0) < 1) {
-      return false;
-    }
-
-    if (actor.heroMarkedThisGeneration || this.evolutionSystem.hasGenerationHero()) {
+    if (!this.canBecomeGenerationHero(actor)) {
       return false;
     }
 

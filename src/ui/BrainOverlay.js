@@ -31,14 +31,15 @@ export class BrainOverlay {
     this.outputLabelStyle = new TextStyle({
       fontFamily: "Arial",
       fontSize: 10,
-      fill: 0xf8f1e0,
+      fontWeight: "700",
+      fill: 0xfaf6e8,
     });
 
     this.metricStyle = new TextStyle({
       fontFamily: "Arial",
       fontSize: 11,
       fontWeight: "700",
-      fill: 0xcfefff,
+      fill: 0xd7f4ff,
     });
 
     this.titleText = new Text({
@@ -144,77 +145,158 @@ export class BrainOverlay {
     const pw = 300 * scale;
     const ph = 320 * scale;
 
+    const outerPadX = 16 * scale;
+    const topHeaderPad = 18 * scale;
+    const titleToNetworkGap = 22 * scale;
+    const networkPadX = 16 * scale;
+    const networkPadY = 12 * scale;
+    const metricsHeight = 56 * scale;
+    const metricsGap = 12 * scale;
+
     this.panel.clear();
 
     this.panel.roundRect(px, py, pw, ph, 20 * scale);
     this.panel.fill({ color: 0x062840, alpha: 0.65 });
     this.panel.stroke({ color: 0x96e8ff, alpha: 0.5, width: 2 });
 
-    this.titleText.x = px + 16 * scale;
-    this.titleText.y = py + 9 * scale;
+    this.titleText.x = px + outerPadX;
+    this.titleText.y = py + topHeaderPad * 0.45;
 
-    const metricsHeight = 52 * scale;
-    const ix = px + 12 * scale;
-    const iy = py + 42 * scale;
-    const iw = pw - 24 * scale;
-    const ih = ph - 54 * scale - metricsHeight;
+    const ix = px + outerPadX + networkPadX;
+    const iy = py + topHeaderPad + titleToNetworkGap + networkPadY;
+    const iw = pw - (outerPadX + networkPadX) * 2;
+    const ih = ph - iy + py - metricsHeight - metricsGap - networkPadY;
 
     const layerCount = this.architecture.length;
     const layerSpacing = iw / Math.max(1, layerCount - 1);
+    const outputInset = layerSpacing * 0.18;
 
     const layers = this.architecture.map((count, i) => {
-      const x = ix + i * layerSpacing;
-      const top = iy + 8 * scale;
-      const bottom = iy + ih - 8 * scale;
-      const step = (bottom - top) / Math.max(1, count - 1);
+      let x = ix + i * layerSpacing;
+
+      if (i === layerCount - 1) {
+        x -= outputInset;
+      }
+
+      const top = iy + 4 * scale;
+      const bottom = iy + ih - 4 * scale;
+      const verticalInset = i === layerCount - 1 ? (bottom - top) * 0.16 : 0;
+      const layerTop = top + verticalInset;
+      const layerBottom = bottom - verticalInset;
+      const step = (layerBottom - layerTop) / Math.max(1, count - 1);
 
       return Array.from({ length: count }, (_, j) => ({
         x,
-        y: top + j * step,
+        y: layerTop + j * step,
       }));
     });
 
-    this.drawConnections(layers);
-    this.drawNodes(layers);
+    this.drawNetworkFrame(ix, iy, iw, ih, scale);
+    this.drawConnections(layers, scale);
+    this.drawNodes(layers, scale);
     this.layoutOutputLabels(layers[layers.length - 1], px, pw, scale);
     this.layoutMetrics(px, py, pw, ph, scale);
   }
 
-  drawConnections(layers) {
+  drawNetworkFrame(ix, iy, iw, ih, scale) {
+    this.panel.roundRect(ix - 8 * scale, iy - 6 * scale, iw + 16 * scale, ih + 12 * scale, 14 * scale);
+    this.panel.fill({ color: 0x7edfff, alpha: 0.045 });
+    this.panel.stroke({ color: 0x8cecff, alpha: 0.18, width: 1.5 });
+  }
+
+  drawConnections(layers, scale) {
+    const lastLayerIndex = layers.length - 2;
+
     for (let l = 0; l < layers.length - 1; l++) {
-      for (const a of layers[l]) {
-        for (const b of layers[l + 1]) {
+      for (let ai = 0; ai < layers[l].length; ai++) {
+        const a = layers[l][ai];
+
+        for (let bi = 0; bi < layers[l + 1].length; bi++) {
+          const b = layers[l + 1][bi];
+
+          const style = this.getConnectionStyle(l, lastLayerIndex, ai, bi, layers[l].length, layers[l + 1].length);
+
           this.panel.moveTo(a.x, a.y);
           this.panel.lineTo(b.x, b.y);
-          this.panel.stroke({ color: 0x78ebdc, alpha: 0.08, width: 1 });
+          this.panel.stroke({
+            width: style.width * scale,
+            color: style.color,
+            alpha: style.alpha,
+          });
         }
       }
     }
   }
 
-  drawNodes(layers) {
-    const low = [111, 241, 206];
-    const high = [255, 195, 109];
+  getConnectionStyle(layerIndex, lastLayerIndex, fromIndex, toIndex, fromCount, toCount) {
+    const fromT = fromCount <= 1 ? 0.5 : fromIndex / (fromCount - 1);
+    const toT = toCount <= 1 ? 0.5 : toIndex / (toCount - 1);
+    const bridgeT = (fromT + toT) * 0.5;
+
+    if (layerIndex === 0) {
+      return {
+        color: this.mix([88, 242, 255], [120, 255, 204], bridgeT),
+        alpha: 0.16 + bridgeT * 0.06,
+        width: 1.15,
+      };
+    }
+
+    if (layerIndex === lastLayerIndex) {
+      const outputIndex = Math.min(this.outputs.length - 1, toIndex);
+      const outputSignal = this.normalizeSigned(this.outputs[outputIndex] ?? 0);
+      return {
+        color: this.mix([124, 255, 226], [255, 163, 122], outputSignal),
+        alpha: 0.18 + outputSignal * 0.08,
+        width: 1.25,
+      };
+    }
+
+    return {
+      color: this.mix([92, 226, 255], [157, 247, 255], bridgeT),
+      alpha: 0.12 + bridgeT * 0.05,
+      width: 1.0,
+    };
+  }
+
+  drawNodes(layers, scale) {
+    const inputLow = [126, 255, 230];
+    const inputHigh = [255, 214, 115];
+    const hiddenLow = [122, 234, 255];
+    const hiddenHigh = [208, 250, 255];
+    const outputLow = [101, 248, 230];
+    const outputHigh = [255, 158, 118];
 
     layers.forEach((layer, i) => {
       layer.forEach((node, j) => {
-        let radius = 3;
-        let color = 0x76d6e8;
+        let radius = 3.3 * scale;
+        let color = 0x8deaff;
+        let glowAlpha = 0.18;
 
         if (i === 0) {
-          const t = this.inputs[j] ?? 0;
-          color = this.mix(low, high, t);
-          radius = 4;
+          const t = this.normalizeUnsigned(this.inputs[j] ?? 0);
+          color = this.mix(inputLow, inputHigh, t);
+          radius = 4.4 * scale;
+          glowAlpha = 0.24;
+        } else if (i === layers.length - 1) {
+          const t = this.normalizeSigned(this.outputs[j] ?? 0);
+          color = this.mix(outputLow, outputHigh, t);
+          radius = 6.2 * scale;
+          glowAlpha = 0.28;
+        } else {
+          const t = layer.length <= 1 ? 0.5 : j / (layer.length - 1);
+          color = this.mix(hiddenLow, hiddenHigh, t);
+          radius = 3.8 * scale;
+          glowAlpha = 0.2;
         }
 
-        if (i === layers.length - 1) {
-          const t = ((this.outputs[j] ?? 0) + 1) / 2;
-          color = this.mix([94, 229, 217], [255, 164, 120], t);
-          radius = 6;
-        }
+        this.panel.circle(node.x, node.y, radius * 1.85);
+        this.panel.fill({ color, alpha: glowAlpha * 0.45 });
 
         this.panel.circle(node.x, node.y, radius);
-        this.panel.fill({ color, alpha: 0.95 });
+        this.panel.fill({ color, alpha: 0.98 });
+
+        this.panel.circle(node.x, node.y, radius * 0.34);
+        this.panel.fill({ color: 0xffffff, alpha: 0.7 });
       });
     });
   }
@@ -235,22 +317,22 @@ export class BrainOverlay {
 
       label.text = labelText;
       label.visible = true;
-      label.x = Math.min(node.x + 8 * scale, px + pw - 40);
-      label.y = node.y - 6;
+      label.x = Math.min(node.x + 12 * scale, px + pw - 58 * scale);
+      label.y = node.y - 7 * scale;
     }
   }
 
   layoutMetrics(px, py, pw, ph, scale) {
-    const dividerY = py + ph - 60 * scale;
+    const dividerY = py + ph - 64 * scale;
 
-    this.panel.moveTo(px + 12 * scale, dividerY);
-    this.panel.lineTo(px + pw - 12 * scale, dividerY);
+    this.panel.moveTo(px + 14 * scale, dividerY);
+    this.panel.lineTo(px + pw - 14 * scale, dividerY);
     this.panel.stroke({ color: 0x78d7f5, alpha: 0.22, width: 2 });
 
-    const leftX = px + 16 * scale;
-    const rightX = px + pw * 0.53;
-    const row1Y = dividerY + 8 * scale;
-    const row2Y = dividerY + 24 * scale;
+    const leftX = px + 18 * scale;
+    const rightX = px + pw * 0.54;
+    const row1Y = dividerY + 9 * scale;
+    const row2Y = dividerY + 26 * scale;
 
     const entries = [
       {
@@ -289,6 +371,14 @@ export class BrainOverlay {
   formatMetricNumber(value) {
     const safe = Number.isFinite(value) ? value : 0;
     return Math.round(safe).toLocaleString();
+  }
+
+  normalizeSigned(value) {
+    return Math.max(0, Math.min(1, (value + 1) * 0.5));
+  }
+
+  normalizeUnsigned(value) {
+    return Math.max(0, Math.min(1, value));
   }
 
   mix(a, b, t) {
