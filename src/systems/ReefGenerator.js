@@ -508,7 +508,10 @@ export class ReefGenerator {
 
         sprite.scale.set(scaleX, scaleY);
 
-        const { tipY, tipCenterX } = this.getTipAnchor(profile, isTop, 12);
+
+
+
+        /* const { tipY, tipCenterX } = this.getTipAnchor(profile, isTop, 12);
 
         const scaledWidth = frameWidth * scaleX;
         const scaledHeight = frameHeight * scaleY;
@@ -527,7 +530,32 @@ export class ReefGenerator {
             // flip upward so the teeth seat into the upper tip region
             sprite.scale.y *= -1;
             sprite.y = tipY + scaledHeight - 77;
+        } */
+
+        const { tipY, baseCenterX } = this.getCoralAnchors(profile, isTop, 14);
+
+        const scaledWidth = frameWidth * scaleX;
+        const scaledHeight = frameHeight * scaleY;
+
+        // 🔥 HORIZONTAL: BASE-LOCKED (stable)
+        sprite.x = baseCenterX - scaledWidth * 0.5;
+
+        // mild clamp so we don’t drift too far
+        const maxOverflowX = (scaledWidth - this.coralBodyWidth) * 0.6;
+        sprite.x = this.clamp(
+            sprite.x,
+            -maxOverflowX,
+            this.coralBodyWidth - scaledWidth + maxOverflowX
+        );
+
+        // 🔥 VERTICAL: TIP-LOCKED (already working)
+        if (isTop) {
+            sprite.y = tipY - scaledHeight + 77;
+        } else {
+            sprite.scale.y *= -1;
+            sprite.y = tipY + scaledHeight - 77;
         }
+
 
         sprite.tint = palette.filterTint;
         sprite.alpha = 0.98;
@@ -536,29 +564,36 @@ export class ReefGenerator {
     }
 
 
-    getTipAnchor(profile, isTop, bandDepth = 12) {
+    getCoralAnchors(profile, isTop, bandDepth = 14) {
         if (!profile?.length) {
             return {
                 tipY: isTop ? 0 : this.maxHeight,
-                tipCenterX: this.coralBodyWidth * 0.5,
+                baseCenterX: this.coralBodyWidth * 0.5,
             };
         }
 
+        // --- TIP ---
         const tipY = isTop
-            ? Math.max(...profile.map((p) => p.y))
-            : Math.min(...profile.map((p) => p.y));
+            ? Math.max(...profile.map(p => p.y))
+            : Math.min(...profile.map(p => p.y));
 
-        const tipBandPoints = profile.filter((p) => {
+        // --- BASE ---
+        const baseY = isTop
+            ? Math.min(...profile.map(p => p.y))
+            : Math.max(...profile.map(p => p.y));
+
+        const baseBand = profile.filter(p => {
             return isTop
-                ? p.y >= tipY - bandDepth
-                : p.y <= tipY + bandDepth;
+                ? p.y <= baseY + bandDepth
+                : p.y >= baseY - bandDepth;
         });
 
-        const anchorPoints = tipBandPoints.length > 0 ? tipBandPoints : profile;
-        const tipCenterX =
+        const anchorPoints = baseBand.length > 0 ? baseBand : profile;
+
+        const baseCenterX =
             anchorPoints.reduce((sum, p) => sum + p.x, 0) / anchorPoints.length;
 
-        return { tipY, tipCenterX };
+        return { tipY, baseCenterX };
     }
 
 
