@@ -39,6 +39,7 @@ export class Game {
       "assets/FloopyFish_logo.png",
       "assets/Player_Mode_icons.png",
       "assets/Fish-Icon_set.png",
+      "assets/Coral_texture_sheet.png",
     ]);
 
     this.backgroundLayer = new Container();
