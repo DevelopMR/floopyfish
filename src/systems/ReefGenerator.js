@@ -448,13 +448,13 @@ export class ReefGenerator {
         const maskShape = new Graphics();
         maskShape.poly(path).fill(0xffffff);
 
-        const coralSprite = this.createSheetCoralSprite(isTop, palette);
+        const coralSprite = this.createSheetCoralSprite(profile, isTop, palette);
         coralSprite.mask = maskShape;
 
         const tintOverlay = new Graphics();
         tintOverlay.poly(path).fill({
             color: palette.filterTint,
-            alpha: 0.16,
+            alpha: 0.10,
         });
 
         const softShade = new Graphics();
@@ -478,10 +478,10 @@ export class ReefGenerator {
         return container;
     }
 
-    createSheetCoralSprite(isTop, palette) {
+    createSheetCoralSprite(profile, isTop, palette) {
         const sheetTexture = Texture.from(this.coralSheetPath);
 
-        const totalColumns = Math.max(1, this.coralSheetColumns);
+        const totalColumns = this.coralSheetColumns;
         const frameWidth = Math.floor(sheetTexture.width / totalColumns);
         const frameHeight = sheetTexture.height;
 
@@ -498,21 +498,42 @@ export class ReefGenerator {
         });
 
         const sprite = new Sprite(frameTexture);
-        sprite.tint = palette.filterTint;
-        sprite.alpha = 0.94;
 
-        const scaleX = this.coralBodyWidth / Math.max(1, frameWidth);
-        const scaleY = this.maxHeight / Math.max(1, frameHeight);
+        // 🎯 --- CONTROL VALUES ---
+        const overscanY = 1.3;      // ~130% vertical fill (your call ✔)
+        const overscanX = 1.08;     // minimal horizontal stretch (preserve roundness ✔)
+
+        const scaleX = (this.coralBodyWidth / frameWidth) * overscanX;
+        const scaleY = (this.maxHeight / frameHeight) * overscanY;
+
+        sprite.scale.set(scaleX, scaleY);
+
+        // 🎯 --- FIND TIP (anchor reference) ---
+        let tipY;
 
         if (isTop) {
-            sprite.x = 0;
-            sprite.y = 0;
-            sprite.scale.set(scaleX, scaleY);
+            // lowest point in profile
+            tipY = Math.max(...profile.map(p => p.y));
         } else {
-            sprite.x = 0;
-            sprite.y = this.maxHeight;
-            sprite.scale.set(scaleX, -scaleY);
+            // highest point in profile
+            tipY = Math.min(...profile.map(p => p.y));
         }
+
+        // 🎯 --- POSITIONING ---
+        sprite.x = -((frameWidth * scaleX - this.coralBodyWidth) * 0.5);
+
+        if (isTop) {
+            // anchor top coral downward
+            sprite.y = tipY - frameHeight * scaleY + 8;
+        } else {
+            // flip + anchor upward
+            sprite.scale.y *= -1;
+            sprite.y = tipY + frameHeight * scaleY - 8;
+        }
+
+        // 🎯 --- COLOR FILTER ---
+        sprite.tint = palette.filterTint;
+        sprite.alpha = 0.96;
 
         return sprite;
     }
