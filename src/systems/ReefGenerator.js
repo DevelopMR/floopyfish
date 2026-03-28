@@ -499,44 +499,68 @@ export class ReefGenerator {
 
         const sprite = new Sprite(frameTexture);
 
-        // 🔥 --- CALIBRATED SCALE ---
-        const overscanY = 1.40;   // slightly above 130% to ensure full tip coverage
-        const overscanX = 1.70;   // VERY light horizontal stretch (preserve roundness)
+        // calibrated overscan
+        const overscanY = 1.40;
+        const overscanX = 1.70;
 
         const scaleX = (this.coralBodyWidth / frameWidth) * overscanX;
         const scaleY = (this.maxHeight / frameHeight) * overscanY;
 
         sprite.scale.set(scaleX, scaleY);
 
-        // 🔥 --- FIND TRUE TIP ---
-        let tipY;
+        const { tipY, tipCenterX } = this.getTipAnchor(profile, isTop, 12);
 
-        if (isTop) {
-            tipY = Math.max(...profile.map(p => p.y));
-        } else {
-            tipY = Math.min(...profile.map(p => p.y));
-        }
-
-        // 🔥 --- CENTER WIDTH (prevent side gaps) ---
         const scaledWidth = frameWidth * scaleX;
-        sprite.x = -(scaledWidth - this.coralBodyWidth) * 0.5;
+        const scaledHeight = frameHeight * scaleY;
 
-        // 🔥 --- TIP LOCK (this is the key fix) ---
+        // center on the actual tip region, not the full coral width
+        sprite.x = tipCenterX - scaledWidth * 0.5;
+
+        // small containment clamp so it can overfill, but not wildly drift
+        const maxOverflowX = (scaledWidth - this.coralBodyWidth) * 0.65;
+        sprite.x = this.clamp(sprite.x, -maxOverflowX, this.coralBodyWidth - scaledWidth + maxOverflowX);
+
         if (isTop) {
-            // push texture DOWN so it overfills past the tip
-            sprite.y = tipY - frameHeight * scaleY + 77;
+            // push downward so the teeth seat into the lower tip region
+            sprite.y = tipY - scaledHeight + 77;
         } else {
-            // flip + push UP so it overfills past the tip
+            // flip upward so the teeth seat into the upper tip region
             sprite.scale.y *= -1;
-            sprite.y = tipY + frameHeight * scaleY - 77;
+            sprite.y = tipY + scaledHeight - 77;
         }
 
-        // 🔥 --- COLOR (slightly reduced interference) ---
         sprite.tint = palette.filterTint;
         sprite.alpha = 0.98;
 
         return sprite;
     }
+
+
+    getTipAnchor(profile, isTop, bandDepth = 12) {
+        if (!profile?.length) {
+            return {
+                tipY: isTop ? 0 : this.maxHeight,
+                tipCenterX: this.coralBodyWidth * 0.5,
+            };
+        }
+
+        const tipY = isTop
+            ? Math.max(...profile.map((p) => p.y))
+            : Math.min(...profile.map((p) => p.y));
+
+        const tipBandPoints = profile.filter((p) => {
+            return isTop
+                ? p.y >= tipY - bandDepth
+                : p.y <= tipY + bandDepth;
+        });
+
+        const anchorPoints = tipBandPoints.length > 0 ? tipBandPoints : profile;
+        const tipCenterX =
+            anchorPoints.reduce((sum, p) => sum + p.x, 0) / anchorPoints.length;
+
+        return { tipY, tipCenterX };
+    }
+
 
     makeCoralPalette() {
         const baseTints = [
