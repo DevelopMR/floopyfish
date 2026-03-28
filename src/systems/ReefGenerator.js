@@ -499,41 +499,41 @@ export class ReefGenerator {
 
         const sprite = new Sprite(frameTexture);
 
-        // 🎯 --- CONTROL VALUES ---
-        const overscanY = 1.3;      // ~130% vertical fill (your call ✔)
-        const overscanX = 1.08;     // minimal horizontal stretch (preserve roundness ✔)
+        // 🔥 --- CALIBRATED SCALE ---
+        const overscanY = 1.40;   // slightly above 130% to ensure full tip coverage
+        const overscanX = 1.70;   // VERY light horizontal stretch (preserve roundness)
 
         const scaleX = (this.coralBodyWidth / frameWidth) * overscanX;
         const scaleY = (this.maxHeight / frameHeight) * overscanY;
 
         sprite.scale.set(scaleX, scaleY);
 
-        // 🎯 --- FIND TIP (anchor reference) ---
+        // 🔥 --- FIND TRUE TIP ---
         let tipY;
 
         if (isTop) {
-            // lowest point in profile
             tipY = Math.max(...profile.map(p => p.y));
         } else {
-            // highest point in profile
             tipY = Math.min(...profile.map(p => p.y));
         }
 
-        // 🎯 --- POSITIONING ---
-        sprite.x = -((frameWidth * scaleX - this.coralBodyWidth) * 0.5);
+        // 🔥 --- CENTER WIDTH (prevent side gaps) ---
+        const scaledWidth = frameWidth * scaleX;
+        sprite.x = -(scaledWidth - this.coralBodyWidth) * 0.5;
 
+        // 🔥 --- TIP LOCK (this is the key fix) ---
         if (isTop) {
-            // anchor top coral downward
-            sprite.y = tipY - frameHeight * scaleY + 8;
+            // push texture DOWN so it overfills past the tip
+            sprite.y = tipY - frameHeight * scaleY + 77;
         } else {
-            // flip + anchor upward
+            // flip + push UP so it overfills past the tip
             sprite.scale.y *= -1;
-            sprite.y = tipY + frameHeight * scaleY - 8;
+            sprite.y = tipY + frameHeight * scaleY - 77;
         }
 
-        // 🎯 --- COLOR FILTER ---
+        // 🔥 --- COLOR (slightly reduced interference) ---
         sprite.tint = palette.filterTint;
-        sprite.alpha = 0.96;
+        sprite.alpha = 0.98;
 
         return sprite;
     }
